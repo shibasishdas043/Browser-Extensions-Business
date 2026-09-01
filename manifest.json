@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "ZenWeb - Digital Peace Suite",
+  "version": "1.0.0",
+  "description": "Clean up the web: skip recipe fluff, kill floating videos, block Pinterest spam, smash overlays, and save form text.",
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "ZenWeb - Digital Peace"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "https://*/*",
+    "http://*/*"
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'"
+  }
+}
+

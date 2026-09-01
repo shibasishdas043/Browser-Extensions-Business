@@ -1,0 +1,31 @@
+{
+  "name": "browser-extensions-business",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shibasishdas043/Browser-Extensions-Business.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/shibasishdas043/Browser-Extensions-Business/issues"
+  },
+  "homepage": "https://github.com/shibasishdas043/Browser-Extensions-Business#readme",
+  "devDependencies": {
+    "@types/chrome": "^0.2.7",
+    "typescript": "^7.0.2",
+    "vite": "^8.2.2"
+  },
+  "dependencies": {
+    "gsap": "^3.15.0"
+  }
+}
