@@ -44,10 +44,10 @@ class ZenWebPopupUI {
   private totalEl!:       HTMLElement;
   private heroLabelEl!:   HTMLElement;
   private heroCenterEl!:  HTMLElement;
-  private domainEl!:      HTMLElement;
+  private domainEl:       HTMLElement | null = null;
   private timeSavedEl!:   HTMLElement;
   private ringFillEl!:    SVGCircleElement | null;
-  private liveDotEl!:     HTMLElement;
+  private liveDotEl:      HTMLElement | null = null;
   private spotlightEl!:   HTMLElement;
   private cardEl!:        HTMLElement;
   private iconEl!:        HTMLElement;
@@ -106,10 +106,10 @@ class ZenWebPopupUI {
     this.totalEl           = document.getElementById('hero-blocked-total')!;
     this.heroLabelEl       = document.getElementById('hero-blocked-label')!;
     this.heroCenterEl      = document.getElementById('zw-ring-center')!;
-    this.domainEl          = document.getElementById('zw-page-domain')!;
+    this.domainEl          = document.getElementById('zw-page-domain');
     this.timeSavedEl       = document.getElementById('hero-time-saved')!;
     this.ringFillEl        = document.getElementById('zw-ring-fill') as SVGCircleElement | null;
-    this.liveDotEl         = document.getElementById('zw-live-dot')!;
+    this.liveDotEl         = document.getElementById('zw-live-dot');
     this.spotlightEl       = document.getElementById('zw-spotlight')!;
     this.cardEl            = document.getElementById('zw-spot-card')!;
     this.iconEl            = document.getElementById('zw-spot-icon')!;
@@ -429,9 +429,9 @@ class ZenWebPopupUI {
     });
   }
 
-  private animateRing(fraction: number) {
+  private animateRing(_fraction: number) {
     if (!this.ringFillEl) return;
-    this.ringFillEl.style.strokeDashoffset = String(CIRC * (1 - Math.min(1, Math.max(0, fraction))));
+    this.ringFillEl.style.strokeDashoffset = '0';
   }
 
   /**
@@ -440,7 +440,7 @@ class ZenWebPopupUI {
   private applyProtectionState(enabled: boolean, animate = true) {
     this.isOn = enabled;
     if (this.toggleBtn) this.toggleBtn.checked = enabled;
-    this.liveDotEl.classList.toggle('zw--off', !enabled);
+    this.liveDotEl?.classList.toggle('zw--off', !enabled);
     this.toggleTitle.textContent = enabled ? 'All Protections ON' : 'All Protections OFF';
     this.toggleTitle.classList.toggle('zw--off', !enabled);
     this.toggleSub.textContent = enabled ? '7 shields active' : 'Protection paused';
@@ -481,14 +481,9 @@ class ZenWebPopupUI {
           },
         });
 
-        // Re-illuminate the ring
-        const targetOffset = CIRC * (1 - Math.min(1, Math.max(0, this.totalBlocked / Math.max(this.totalBlocked * 1.3, 60))));
+        // Keep ring fully illuminated
         if (this.ringFillEl) {
-          gsap.to(this.ringFillEl, {
-            strokeDashoffset: targetOffset,
-            duration: 1.2,
-            ease: 'power3.out',
-          });
+          this.ringFillEl.style.strokeDashoffset = '0';
         }
 
         // Pop the big number
