@@ -26,14 +26,14 @@
         <span class="zw-wordmark">ZenWeb</span>
       </div>
       <div class="zw-actions">
-        <button class="zw-icon-btn" id="zw-btn-refresh" title="Rescan page">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <button class="zw-icon-btn zw-btn-refresh" id="zw-btn-refresh" title="Rescan page" aria-label="Rescan page">
+          <svg class="zw-icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
             <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
           </svg>
         </button>
-        <button class="zw-icon-btn" id="zw-btn-settings" title="Full settings">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <button class="zw-icon-btn zw-btn-settings" id="zw-btn-settings" title="Full settings" aria-label="Full settings">
+          <svg class="zw-icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <circle cx="12" cy="12" r="3"/>
             <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
           </svg>
@@ -46,76 +46,129 @@
       <div class="zw-glow zw-glow--tl" aria-hidden="true"></div>
       <div class="zw-glow zw-glow--br" aria-hidden="true"></div>
 
-      <!-- Ring + Counter -->
-      <div class="zw-ring-wrap">
-        <svg class="zw-ring-svg" viewBox="0 0 170 170" width="170" height="170">
-          <defs>
-            <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-              <stop offset="0%" stop-color="#00ff87"/>
-              <stop offset="100%" stop-color="#00cfff"/>
-            </linearGradient>
-          </defs>
-          <circle class="zw-ring-track" cx="85" cy="85" r="67"/>
-          <circle class="zw-ring-fill" id="zw-ring-fill" cx="85" cy="85" r="67"/>
-        </svg>
-        <div class="zw-ring-center" id="zw-ring-center">
-          <span class="zw-big-num" id="hero-blocked-total">0</span>
-          <span class="zw-big-label" id="hero-blocked-label">INTERCEPTED</span>
-        </div>
-      </div>
-
-      <!-- Domain + Time -->
-      <div class="zw-meta-row">
-        <div class="zw-domain-pill">
-          <span class="zw-live-dot" id="zw-live-dot"></span>
-          <span class="zw-domain-text" id="zw-page-domain">Active session</span>
-        </div>
-        <span class="zw-time-badge" id="hero-time-saved">—</span>
-      </div>
-
-      <div class="zw-sep"></div>
-
-      <!-- Master Toggle — ABOVE the animated spotlight -->
-      <div class="zw-toggle-section">
-        <div class="zw-toggle-label">
-          <span class="zw-toggle-title" id="zw-toggle-title">All Protections ON</span>
-          <span class="zw-toggle-sub" id="zw-toggle-sub">7 shields active</span>
-        </div>
-        <button class="zw-toggle-btn" id="zw-master-toggle" aria-pressed="true">
-          <span class="zw-toggle-thumb"></span>
-        </button>
-      </div>
-
-      <div class="zw-sep" style="margin-top:10px"></div>
-
-      <!-- Spotlight: one stat at a time — fills remaining space -->
-      <div class="zw-spotlight" id="zw-spotlight" aria-live="polite">
-        <div class="zw-spot-card" id="zw-spot-card">
-          <span class="zw-spot-icon" id="zw-spot-icon">🔍</span>
-          <div class="zw-spot-body">
-            <span class="zw-spot-label" id="zw-spot-label">SEO Spam Filtered</span>
-            <span class="zw-spot-count" id="zw-spot-count">0</span>
+      <!-- Active Dashboard View -->
+      <div class="zw-active-view" id="zw-active-view">
+        <!-- Ring + Counter -->
+        <div class="zw-ring-wrap">
+          <svg class="zw-ring-svg" viewBox="0 0 170 170" width="170" height="170">
+            <defs>
+              <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" stop-color="#00ff87"/>
+                <stop offset="100%" stop-color="#00cfff"/>
+              </linearGradient>
+            </defs>
+            <circle class="zw-ring-track" cx="85" cy="85" r="67"/>
+            <circle class="zw-ring-fill" id="zw-ring-fill" cx="85" cy="85" r="67"/>
+          </svg>
+          <div class="zw-ring-center" id="zw-ring-center">
+            <span class="zw-big-num" id="hero-blocked-total">0</span>
+            <span class="zw-big-label" id="hero-blocked-label">INTERCEPTED</span>
           </div>
         </div>
-        <div class="zw-dots" id="zw-dots" role="tablist">
-          <span class="zw-dot zw-dot--active" data-i="0"></span>
-          <span class="zw-dot" data-i="1"></span>
-          <span class="zw-dot" data-i="2"></span>
-          <span class="zw-dot" data-i="3"></span>
-          <span class="zw-dot" data-i="4"></span>
-          <span class="zw-dot" data-i="5"></span>
-          <span class="zw-dot" data-i="6"></span>
+
+        <!-- Domain + Time -->
+        <div class="zw-meta-row">
+          <div class="zw-domain-pill">
+            <span class="zw-live-dot" id="zw-live-dot"></span>
+            <span class="zw-domain-text" id="zw-page-domain">Active session</span>
+          </div>
+          <span class="zw-time-badge" id="hero-time-saved">—</span>
+        </div>
+
+        <div class="zw-sep"></div>
+
+        <!-- Master Toggle — Pixel Coin Switch -->
+        <div class="zw-toggle-section" id="zw-toggle-section">
+          <div class="zw-toggle-label">
+            <span class="zw-toggle-title" id="zw-toggle-title">All Protections ON</span>
+            <span class="zw-toggle-sub" id="zw-toggle-sub">7 shields active</span>
+          </div>
+          <label class="pixel-toggle-label" for="zw-master-toggle" title="Toggle all protections">
+            <input type="checkbox" id="zw-master-toggle" class="pixel-checkbox" checked />
+            <div class="pixel-toggle-track">
+              <div class="indicator-wrapper indicator-on-wrap">
+                <svg viewBox="0 0 8 8" class="pixel-indicator ind-on" fill="currentColor">
+                  <path d="M1,4h2v2H1zm1,1h2v2H2zm1,1h2v2H3zm1,-2h2v3H4zm1,-2h2v3H5zm1,-2h2v3H6z" />
+                </svg>
+              </div>
+              <div class="indicator-wrapper indicator-off-wrap">
+                <svg viewBox="0 0 8 8" class="pixel-indicator ind-off" fill="currentColor">
+                  <path d="M3,3h2v2H3zM2,2h2v2H2zM1,1h2v2H1zM4,2h2v2H4zM5,1h2v2H5zM2,4h2v2H2zM1,5h2v2H1zM4,4h2v2H4zM5,5h2v2H5z" />
+                </svg>
+              </div>
+              <div class="pixel-coin-thumb">
+                <div class="face-svg face-sad">
+                  <svg viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M3,2h3v1H3zm7,1h3v-1h-3z" />
+                    <path d="M4,4h2v3H4zm6,0h2v3h-2z" />
+                    <path d="M3,11h2v2H3zm8,0h2v2h-2zm-6,-2h6v2H5z" />
+                  </svg>
+                </div>
+                <div class="face-svg face-happy">
+                  <svg viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M3,2h3v1H3zm7,0h3v1h-3z" />
+                    <path d="M4,4h2v3H4zm6,0h2v3h-2z" />
+                    <path d="M3,9h2v2H3zm8,0h2v2h-2zm-6,2h6v2H5z" />
+                  </svg>
+                </div>
+              </div>
+            </div>
+          </label>
+        </div>
+
+        <div class="zw-sep" id="zw-sep-toggle-bottom" style="margin-top:10px"></div>
+
+        <!-- Spotlight: one stat at a time — fills remaining space -->
+        <div class="zw-spotlight" id="zw-spotlight" aria-live="polite">
+          <div class="zw-spot-card" id="zw-spot-card">
+            <span class="zw-spot-icon" id="zw-spot-icon">🔍</span>
+            <div class="zw-spot-body">
+              <span class="zw-spot-label" id="zw-spot-label">SEO Spam Filtered</span>
+              <span class="zw-spot-count" id="zw-spot-count">0</span>
+            </div>
+          </div>
+          <div class="zw-dots" id="zw-dots" role="tablist">
+            <span class="zw-dot zw-dot--active" data-i="0"></span>
+            <span class="zw-dot" data-i="1"></span>
+            <span class="zw-dot" data-i="2"></span>
+            <span class="zw-dot" data-i="3"></span>
+            <span class="zw-dot" data-i="4"></span>
+            <span class="zw-dot" data-i="5"></span>
+            <span class="zw-dot" data-i="6"></span>
+          </div>
+        </div>
+
+        <!-- Donation -->
+        <div class="zw-donation" id="zw-donation">
+          <span class="zw-donation-icon">☕</span>
+          <div class="zw-donation-text">
+            <span class="zw-donation-title">Enjoying ZenWeb?</span>
+            <span class="zw-donation-sub">Support development</span>
+          </div>
+          <a class="zw-donate-btn" id="zw-btn-donate" href="#">Donate</a>
         </div>
       </div>
 
-      <!-- Donation -->
-      <div class="zw-donation">
-        <span class="zw-donation-icon">☕</span>
-        <div class="zw-donation-text">
-          <span class="zw-donation-title">Enjoying ZenWeb?</span>
-          <span class="zw-donation-sub">Support development</span>
+      <!-- Full-Height Disabled State Screen -->
+      <div class="zw-disabled-card" id="zw-disabled-card" style="display: none;">
+        <div class="zw-disabled-badge">
+          <span class="zw-disabled-dot"></span>
+          <span>7 Shields Suspended</span>
         </div>
-        <a class="zw-donate-btn" id="zw-btn-donate" href="#">Donate</a>
+
+        <!-- Circular Power Switch Button -->
+        <div class="zw-power-switch-wrap">
+          <button class="zw-power-switch" id="zw-btn-turn-on" type="button" aria-label="Turn On All Protections" title="Turn On All Protections">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" class="zw-power-svg">
+              <path d="M288 32c0-17.7-14.3-32-32-32s-32 14.3-32 32V256c0 17.7 14.3 32 32 32s32-14.3 32-32V32zM143.5 120.6c13.6-11.3 15.4-31.5 4.1-45.1s-31.5-15.4-45.1-4.1C49.7 115.4 16 181.8 16 256c0 132.5 107.5 240 240 240s240-107.5 240-240c0-74.2-33.8-140.6-86.6-184.6c-13.6-11.3-33.8-9.4-45.1 4.1s-9.4 33.8 4.1 45.1c38.9 32.3 63.5 81 63.5 135.4c0 97.2-78.8 176-176 176s-176-78.8-176-176c0-54.4 24.7-103.1 63.5-135.4z"/>
+            </svg>
+          </button>
+        </div>
+
+        <div class="zw-disabled-msg">
+          <span class="zw-disabled-title">Web Protection Paused</span>
+          <span class="zw-disabled-sub">Tap the button to restore all 7 active shields</span>
+        </div>
       </div>
 
     </section>

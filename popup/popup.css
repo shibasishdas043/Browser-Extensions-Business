@@ -4,12 +4,92 @@
    ══════════════════════════════════════════════ */
 
 :root {
-  --bg:   #050c16;
-  --card: #091220;
-  --t1: #ffffff;
-  --t2: #566a7f;
+  /* Default / Dark Theme: #212529 */
+  --bg:   #212529;
+  --card: #181c20;
+  --t1:   #ffffff;
+  --t2:   #8a99a8;
   --ease:        cubic-bezier(0.22, 1, 0.36, 1);
   --ease-bounce: cubic-bezier(0.34, 1.7, 0.64, 1);
+}
+
+/* ── AUTO DARK MODE (Browser: Dark -> #212529) ─────────────── */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:   #212529;
+    --card: #181c20;
+    --t1:   #ffffff;
+    --t2:   #8a99a8;
+  }
+}
+
+/* ── AUTO LIGHT MODE (Browser: Light -> #edf2fb) ───────────── */
+@media (prefers-color-scheme: light) {
+  :root {
+    --bg:   #edf2fb;
+    --card: #ffffff;
+    --t1:   #0f172a;
+    --t2:   #475569;
+  }
+}
+
+[data-theme="light"],
+body.zw--light {
+  --bg:   #edf2fb;
+  --card: #ffffff;
+  --t1:   #0f172a;
+  --t2:   #475569;
+}
+
+[data-theme="light"] .zw-wordmark,
+body.zw--light .zw-wordmark,
+[data-theme="light"] .zw-big-num,
+body.zw--light .zw-big-num,
+[data-theme="light"] .zw-toggle-title,
+body.zw--light .zw-toggle-title,
+[data-theme="light"] .zw-donation-title,
+body.zw--light .zw-donation-title,
+[data-theme="light"] .zw-disabled-title,
+body.zw--light .zw-disabled-title {
+  color: #0f172a !important;
+}
+
+[data-theme="light"] .zw-spot-label,
+body.zw--light .zw-spot-label {
+  color: #64748b !important;
+}
+
+[data-theme="light"] .zw-spot-card,
+body.zw--light .zw-spot-card,
+[data-theme="light"] .zw-toggle-section,
+body.zw--light .zw-toggle-section {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 4px 16px rgba(15, 23, 42, 0.04) !important;
+}
+
+[data-theme="light"] .zw-hero,
+body.zw--light .zw-hero {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+  box-shadow: 0 8px 30px rgba(15, 23, 42, 0.06) !important;
+}
+
+[data-theme="light"] .zw-icon-btn,
+body.zw--light .zw-icon-btn {
+  background: #ffffff !important;
+  border-color: rgba(15, 23, 42, 0.08) !important;
+  color: #475569 !important;
+}
+
+[data-theme="light"] .zw-ring-track,
+body.zw--light .zw-ring-track {
+  stroke: rgba(15, 23, 42, 0.06) !important;
+}
+
+[data-theme="light"] .zw-sep,
+body.zw--light .zw-sep {
+  background: linear-gradient(90deg, transparent, rgba(15, 23, 42, 0.08) 40%, rgba(15, 23, 42, 0.08) 60%, transparent) !important;
 }
 
 *, *::before, *::after {
@@ -48,14 +128,60 @@ body.zw-body {
   border-radius: 7px; display: flex; align-items: center; justify-content: center;
 }
 .zw-wordmark { font-size: 14px; font-weight: 800; letter-spacing: -0.5px; color: #fff; }
-.zw-actions { display: flex; gap: 4px; }
-.zw-icon-btn {
-  width: 26px; height: 26px; background: rgba(255,255,255,0.04);
-  border: 1px solid rgba(255,255,255,0.07); color: var(--t2);
-  border-radius: 7px; display: flex; align-items: center; justify-content: center;
-  cursor: pointer; transition: all 0.15s var(--ease);
+.zw-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
 }
-.zw-icon-btn:hover { background: rgba(255,255,255,0.09); border-color: rgba(255,255,255,0.14); color: #fff; }
+
+.zw-icon-btn {
+  width: 28px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  color: var(--t2);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  outline: none;
+  position: relative;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  transition: all 0.22s var(--ease);
+}
+
+.zw-icon-btn .zw-icon-svg {
+  transition: transform 0.35s var(--ease), stroke 0.2s var(--ease);
+}
+
+/* Refresh Button Hover & Glow */
+.zw-icon-btn.zw-btn-refresh:hover {
+  background: rgba(0, 255, 135, 0.12);
+  border-color: rgba(0, 255, 135, 0.4);
+  color: #00ff87;
+  box-shadow: 0 0 14px rgba(0, 255, 135, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+.zw-icon-btn.zw-btn-refresh:hover .zw-icon-svg {
+  transform: rotate(180deg);
+}
+
+/* Settings Button Hover & Glow */
+.zw-icon-btn.zw-btn-settings:hover {
+  background: rgba(0, 207, 255, 0.12);
+  border-color: rgba(0, 207, 255, 0.4);
+  color: #00cfff;
+  box-shadow: 0 0 14px rgba(0, 207, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  transform: translateY(-1px);
+}
+.zw-icon-btn.zw-btn-settings:hover .zw-icon-svg {
+  transform: rotate(60deg);
+}
+
+.zw-icon-btn:active {
+  transform: scale(0.9) translateY(0);
+}
 
 /* ── HERO (fills all remaining height) ───── */
 .zw-hero {
@@ -230,33 +356,354 @@ body.zw-body {
 }
 .zw-dot.zw-dot--active { width: 18px; }
 
-/* ── TOGGLE ───────────────────────────────── */
+/* ── ACTIVE DASHBOARD VIEW ───────────────── */
+.zw-active-view {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1;
+  min-height: 0;
+}
+
+/* ── DISABLED STATE / PAUSED UI ──────────── */
+.zw-hero.zw--disabled {
+  border-color: rgba(255, 69, 58, 0.2);
+  background: radial-gradient(circle at 50% 35%, rgba(255, 69, 58, 0.08) 0%, #091220 80%);
+}
+
+.zw-hero.zw--disabled .zw-glow {
+  opacity: 0 !important;
+  transition: opacity 0.4s var(--ease);
+}
+
+.zw-hero.zw--disabled .zw-active-view {
+  display: none !important;
+}
+
+/* ── FULL-HEIGHT DISABLED CARD & POWER BUTTON ──────── */
+.zw-disabled-card {
+  width: 100%;
+  height: 100%;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 30px 20px;
+  gap: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+.zw-disabled-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 1.2px;
+  color: #ff453a;
+  background: rgba(255, 69, 58, 0.12);
+  border: 1px solid rgba(255, 69, 58, 0.28);
+  padding: 4px 12px;
+  border-radius: 99px;
+}
+
+.zw-disabled-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #ff453a;
+  box-shadow: 0 0 7px #ff453a;
+}
+
+/* ── POWER SWITCH (Circular Glowing Button) ── */
+.zw-power-switch-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 12px;
+}
+
+.zw-power-switch {
+  position: relative;
+  width: 82px;
+  height: 82px;
+  background-color: #17202c;
+  border-radius: 50%;
+  z-index: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #2d3848;
+  box-shadow: 0px 0px 6px rgba(0, 0, 0, 0.8) inset, 0 6px 20px rgba(0, 0, 0, 0.4);
+  outline: none;
+  transition: all 0.35s var(--ease);
+}
+
+.zw-power-switch .zw-power-svg {
+  width: 32px;
+  height: 32px;
+  transition: all 0.35s var(--ease);
+}
+
+.zw-power-switch .zw-power-svg path {
+  fill: #ff453a;
+  opacity: 0.85;
+  transition: all 0.35s var(--ease);
+}
+
+/* Glowing Neon Hover & Active State */
+.zw-power-switch:hover {
+  transform: scale(1.08);
+  box-shadow: 0px 0px 2px rgb(151, 243, 255) inset,
+    0px 0px 4px rgb(151, 243, 255) inset, 0px 0px 14px rgb(151, 243, 255) inset,
+    0px 0px 40px rgba(0, 255, 135, 0.7), 0px 0px 80px rgba(0, 207, 255, 0.45),
+    0px 0px 8px rgb(151, 243, 255);
+  border: 2px solid rgb(255, 255, 255);
+  background-color: rgb(22, 50, 58);
+}
+
+.zw-power-switch:hover .zw-power-svg {
+  filter: drop-shadow(0px 0px 8px rgb(151, 243, 255));
+}
+
+.zw-power-switch:hover .zw-power-svg path {
+  fill: rgb(255, 255, 255);
+  opacity: 1;
+}
+
+.zw-power-switch:active {
+  transform: scale(0.92);
+}
+
+.zw-disabled-msg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 6px;
+  padding: 0 12px;
+}
+
+.zw-disabled-title {
+  font-size: 17px;
+  font-weight: 900;
+  color: #ffffff;
+  letter-spacing: -0.3px;
+}
+
+.zw-disabled-sub {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--t2);
+  max-width: 240px;
+  line-height: 1.45;
+  text-align: center;
+}
+
+/* ── TOGGLE SECTION (Master Power Switch) ─────────────────── */
 .zw-toggle-section {
   width: 100%; flex-shrink: 0;
   display: flex; align-items: center; justify-content: space-between;
   background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07);
-  border-radius: 12px; padding: 10px 12px;
+  border-radius: 14px; padding: 8px 14px;
   margin-top: 0;
 }
 .zw-toggle-label { display: flex; flex-direction: column; gap: 1px; }
-.zw-toggle-title { font-size: 11.5px; font-weight: 700; color: #fff; transition: color 0.3s; }
+.zw-toggle-title { font-size: 12px; font-weight: 800; color: #fff; transition: color 0.3s; }
 .zw-toggle-title.zw--off { color: var(--t2); }
 .zw-toggle-sub { font-size: 9.5px; font-weight: 500; color: var(--t2); }
-.zw-toggle-btn {
-  width: 42px; height: 24px; border-radius: 99px; border: none; cursor: pointer;
-  background: #00ff87; box-shadow: 0 0 12px rgba(0,255,135,0.4);
-  position: relative; flex-shrink: 0;
-  transition: background 0.35s var(--ease), box-shadow 0.35s var(--ease);
+
+/* ── PIXEL COIN TOGGLE SWITCH (Optimized & Crisp) ── */
+.pixel-toggle-label {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+  flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
 }
-.zw-toggle-btn[aria-pressed="false"] { background: rgba(255,255,255,0.1); box-shadow: none; }
-.zw-toggle-thumb {
-  position: absolute; top: 3px; left: 3px;
-  width: 18px; height: 18px; background: #fff;
-  border-radius: 50%; box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-  transition: transform 0.35s var(--ease-bounce);
+
+.pixel-checkbox {
+  position: absolute;
+  opacity: 0;
+  width: 0;
+  height: 0;
+  pointer-events: none;
 }
-.zw-toggle-btn[aria-pressed="true"]  .zw-toggle-thumb { transform: translateX(18px); }
-.zw-toggle-btn[aria-pressed="false"] .zw-toggle-thumb { transform: translateX(0px); }
+
+.pixel-toggle-track {
+  width: 52px;
+  height: 28px;
+  border-radius: 99px;
+  background: #0b120f;
+  border: 2px solid #1a231e;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.7), 0 0 10px rgba(0, 255, 170, 0.2);
+  position: relative;
+  transition: background 0.35s ease, border-color 0.35s ease, box-shadow 0.35s ease;
+}
+
+.indicator-wrapper {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 10px;
+  height: 10px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  pointer-events: none;
+  transition: all 0.38s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.indicator-on-wrap {
+  left: 8px;
+  color: #00ffaa;
+  opacity: 0.9;
+  transform: translateY(-50%) scale(1.1);
+  filter: drop-shadow(0 0 3px rgba(0, 255, 170, 0.6));
+}
+
+.indicator-off-wrap {
+  right: 8px;
+  color: #ff007f;
+  opacity: 0.15;
+  transform: translateY(-50%) scale(0.8);
+  filter: none;
+}
+
+.pixel-indicator {
+  width: 10px;
+  height: 10px;
+  shape-rendering: crispEdges;
+}
+
+.pixel-coin-thumb {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #00ffaa;
+  border: 2px solid #0e1a14;
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.4),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.25),
+    0 2px 6px rgba(0, 0, 0, 0.5),
+    0 0 14px rgba(0, 255, 170, 0.55);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  overflow: hidden;
+  transform: translate3d(24px, 0, 0) rotate(360deg);
+  transition:
+    transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1),
+    background 0.35s ease,
+    border-color 0.35s ease,
+    box-shadow 0.35s ease;
+}
+
+.pixel-coin-thumb::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: -130%;
+  width: 60%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0) 0%,
+    rgba(255, 255, 255, 0.32) 50%,
+    rgba(255, 255, 255, 0) 100%
+  );
+  transform: skewX(-25deg);
+  transition: left 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.face-svg {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  color: #0e1a14;
+  transition: all 0.4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+  shape-rendering: crispEdges;
+  z-index: 2;
+}
+
+.face-happy {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+
+.face-sad {
+  opacity: 0;
+  transform: rotate(-180deg) scale(0.65);
+}
+
+/* ── UNCHECKED / OFF STATE ────────────── */
+.pixel-checkbox:not(:checked) ~ .pixel-toggle-track {
+  background: #140b10;
+  border-color: #24141c;
+  box-shadow: inset 0 2px 5px rgba(0, 0, 0, 0.7), 0 0 10px rgba(255, 0, 127, 0.2);
+}
+
+.pixel-checkbox:not(:checked) ~ .pixel-toggle-track .indicator-on-wrap {
+  opacity: 0.12;
+  transform: translateY(-50%) scale(0.8);
+  filter: none;
+}
+
+.pixel-checkbox:not(:checked) ~ .pixel-toggle-track .indicator-off-wrap {
+  opacity: 0.9;
+  transform: translateY(-50%) scale(1.1);
+  filter: drop-shadow(0 0 3px rgba(255, 0, 127, 0.6));
+}
+
+.pixel-checkbox:not(:checked) ~ .pixel-toggle-track .pixel-coin-thumb {
+  transform: translate3d(0px, 0, 0) rotate(0deg);
+  background: #ff007f;
+  border-color: #24141c;
+  box-shadow:
+    inset 0 2px 0 rgba(255, 255, 255, 0.35),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.3),
+    0 2px 6px rgba(0, 0, 0, 0.5),
+    0 0 14px rgba(255, 0, 127, 0.5);
+}
+
+.pixel-checkbox:not(:checked) ~ .pixel-toggle-track .face-happy {
+  opacity: 0;
+  transform: rotate(180deg) scale(0.65);
+}
+
+.pixel-checkbox:not(:checked) ~ .pixel-toggle-track .face-sad {
+  opacity: 1;
+  transform: rotate(0deg) scale(1);
+}
+
+/* Hover Feedback */
+.pixel-toggle-label:hover .pixel-checkbox:checked ~ .pixel-toggle-track .pixel-coin-thumb {
+  transform: translate3d(24px, 0, 0) rotate(360deg) scale(1.08);
+}
+
+.pixel-toggle-label:hover .pixel-checkbox:not(:checked) ~ .pixel-toggle-track .pixel-coin-thumb {
+  transform: translate3d(0px, 0, 0) rotate(0deg) scale(1.08);
+}
+
+.pixel-toggle-label:active .pixel-checkbox:checked ~ .pixel-toggle-track .pixel-coin-thumb {
+  transform: translate3d(24px, 0, 0) rotate(360deg) scale(0.92);
+}
+
+.pixel-toggle-label:active .pixel-checkbox:not(:checked) ~ .pixel-toggle-track .pixel-coin-thumb {
+  transform: translate3d(0px, 0, 0) rotate(0deg) scale(0.92);
+}
 
 /* ── DONATION ─────────────────────────────── */
 .zw-donation {

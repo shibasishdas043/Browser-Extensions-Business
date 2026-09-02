@@ -1,5 +1,6 @@
 import gsap from 'gsap';
 import { openFullSettings, loadSessionStats } from './logic';
+import { getSettings, updateSetting } from '../utils/storage';
 import { ProtectionStats } from '../types';
 
 /* r=67: circumference = 2π×67 ≈ 420.97 */
@@ -39,33 +40,41 @@ const STATS: StatDef[] = [
 const INTERVAL_MS = 2600;
 
 class ZenWebPopupUI {
-  private totalEl!:      HTMLElement;
-  private heroLabelEl!:  HTMLElement;
-  private heroCenterEl!: HTMLElement;
-  private domainEl!:     HTMLElement;
-  private timeSavedEl!:  HTMLElement;
-  private ringFillEl!:   SVGCircleElement | null;
-  private liveDotEl!:    HTMLElement;
-  private cardEl!:       HTMLElement;
-  private iconEl!:       HTMLElement;
-  private labelEl!:      HTMLElement;
-  private countEl!:      HTMLElement;
-  private dotsEls!:      NodeListOf<HTMLElement>;
-  private toggleBtn!:    HTMLButtonElement;
-  private toggleTitle!:  HTMLElement;
-  private toggleSub!:    HTMLElement;
-  private settingsBtn!:  HTMLButtonElement;
-  private refreshBtn!:   HTMLButtonElement;
-  private toastEl!:      HTMLElement;
-  private toastMsgEl!:   HTMLElement;
-  private toastTimer:    number | null = null;
-  private spotTimer:     number | null = null;
-  private heroTimer:     number | null = null;
-  private spotIdx     = 0;
-  private isOn        = true;
+  private heroEl!:        HTMLElement;
+  private totalEl!:       HTMLElement;
+  private heroLabelEl!:   HTMLElement;
+  private heroCenterEl!:  HTMLElement;
+  private domainEl!:      HTMLElement;
+  private timeSavedEl!:   HTMLElement;
+  private ringFillEl!:    SVGCircleElement | null;
+  private liveDotEl!:     HTMLElement;
+  private spotlightEl!:   HTMLElement;
+  private cardEl!:        HTMLElement;
+  private iconEl!:        HTMLElement;
+  private labelEl!:       HTMLElement;
+  private countEl!:       HTMLElement;
+  private dotsEls!:       NodeListOf<HTMLElement>;
+  private activeViewEl!:    HTMLElement;
+  private disabledCardEl!:  HTMLElement;
+  private turnOnBtn!:       HTMLButtonElement;
+  private toggleSectionEl!: HTMLElement;
+  private toggleSepBottomEl!: HTMLElement;
+  private donationEl!:      HTMLElement;
+  private toggleBtn!:       HTMLInputElement;
+  private toggleTitle!:     HTMLElement;
+  private toggleSub!:       HTMLElement;
+  private settingsBtn!:     HTMLButtonElement;
+  private refreshBtn!:      HTMLButtonElement;
+  private toastEl!:         HTMLElement;
+  private toastMsgEl!:      HTMLElement;
+  private toastTimer:       number | null = null;
+  private spotTimer:        number | null = null;
+  private heroTimer:        number | null = null;
+  private spotIdx      = 0;
+  private isOn         = true;
   private heroMode: 'count' | 'status' = 'count';
   private totalBlocked = 74;
-  private statVals    = [14, 28, 5, 3, 8, 12, 4];
+  private statVals     = [14, 28, 5, 3, 8, 12, 4];
 
   constructor() {
     document.readyState === 'loading'
@@ -78,37 +87,60 @@ class ZenWebPopupUI {
     this.bindEvents();
     await this.detectDomain();
     await this.loadStats();
-    this.renderSpot(0, 'first');
-    this.startSpotCycle();
-    this.startHeroCycle();
+
+    // Load persisted settings
+    const settings = await getSettings();
+    this.isOn = settings.masterEnabled;
+    this.applyProtectionState(this.isOn, false);
+
+    if (this.isOn) {
+      this.renderSpot(0, 'first');
+      this.startSpotCycle();
+      this.startHeroCycle();
+    }
   }
 
   private bindRefs() {
-    this.totalEl      = document.getElementById('hero-blocked-total')!;
-    this.heroLabelEl  = document.getElementById('hero-blocked-label')!;
-    this.heroCenterEl = document.getElementById('zw-ring-center')!;
-    this.domainEl     = document.getElementById('zw-page-domain')!;
-    this.timeSavedEl  = document.getElementById('hero-time-saved')!;
-    this.ringFillEl   = document.getElementById('zw-ring-fill') as SVGCircleElement | null;
-    this.liveDotEl    = document.getElementById('zw-live-dot')!;
-    this.cardEl       = document.getElementById('zw-spot-card')!;
-    this.iconEl       = document.getElementById('zw-spot-icon')!;
-    this.labelEl      = document.getElementById('zw-spot-label')!;
-    this.countEl      = document.getElementById('zw-spot-count')!;
-    this.dotsEls      = document.querySelectorAll<HTMLElement>('.zw-dot');
-    this.toggleBtn    = document.getElementById('zw-master-toggle') as HTMLButtonElement;
-    this.toggleTitle  = document.getElementById('zw-toggle-title')!;
-    this.toggleSub    = document.getElementById('zw-toggle-sub')!;
-    this.settingsBtn  = document.getElementById('zw-btn-settings') as HTMLButtonElement;
-    this.refreshBtn   = document.getElementById('zw-btn-refresh') as HTMLButtonElement;
-    this.toastEl      = document.getElementById('zw-toast')!;
-    this.toastMsgEl   = document.getElementById('zw-toast-message')!;
+    this.heroEl            = document.querySelector('.zw-hero')!;
+    this.activeViewEl      = document.getElementById('zw-active-view')!;
+    this.totalEl           = document.getElementById('hero-blocked-total')!;
+    this.heroLabelEl       = document.getElementById('hero-blocked-label')!;
+    this.heroCenterEl      = document.getElementById('zw-ring-center')!;
+    this.domainEl          = document.getElementById('zw-page-domain')!;
+    this.timeSavedEl       = document.getElementById('hero-time-saved')!;
+    this.ringFillEl        = document.getElementById('zw-ring-fill') as SVGCircleElement | null;
+    this.liveDotEl         = document.getElementById('zw-live-dot')!;
+    this.spotlightEl       = document.getElementById('zw-spotlight')!;
+    this.cardEl            = document.getElementById('zw-spot-card')!;
+    this.iconEl            = document.getElementById('zw-spot-icon')!;
+    this.labelEl           = document.getElementById('zw-spot-label')!;
+    this.countEl           = document.getElementById('zw-spot-count')!;
+    this.dotsEls           = document.querySelectorAll<HTMLElement>('.zw-dot');
+    this.disabledCardEl    = document.getElementById('zw-disabled-card')!;
+    this.turnOnBtn         = document.getElementById('zw-btn-turn-on') as HTMLButtonElement;
+    this.toggleSectionEl   = document.getElementById('zw-toggle-section')!;
+    this.toggleSepBottomEl = document.getElementById('zw-sep-toggle-bottom')!;
+    this.donationEl        = document.getElementById('zw-donation')!;
+    this.toggleBtn         = document.getElementById('zw-master-toggle') as HTMLInputElement;
+    this.toggleTitle       = document.getElementById('zw-toggle-title')!;
+    this.toggleSub         = document.getElementById('zw-toggle-sub')!;
+    this.settingsBtn       = document.getElementById('zw-btn-settings') as HTMLButtonElement;
+    this.refreshBtn        = document.getElementById('zw-btn-refresh') as HTMLButtonElement;
+    this.toastEl           = document.getElementById('zw-toast')!;
+    this.toastMsgEl        = document.getElementById('zw-toast-message')!;
   }
 
   private bindEvents() {
-    this.settingsBtn?.addEventListener('click', () => { this.pressAnim(this.settingsBtn); openFullSettings(); });
+    this.settingsBtn?.addEventListener('click', () => {
+      const icon = this.settingsBtn.querySelector('.zw-icon-svg');
+      if (icon) gsap.fromTo(icon, { rotation: 0 }, { rotation: 120, duration: 0.45, ease: 'back.out(2)' });
+      this.pressAnim(this.settingsBtn);
+      openFullSettings();
+    });
 
     this.refreshBtn?.addEventListener('click', async () => {
+      const icon = this.refreshBtn.querySelector('.zw-icon-svg');
+      if (icon) gsap.fromTo(icon, { rotation: 0 }, { rotation: 360, duration: 0.6, ease: 'power2.out' });
       this.pressAnim(this.refreshBtn);
       if (typeof chrome !== 'undefined' && chrome.tabs) {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
@@ -116,22 +148,33 @@ class ZenWebPopupUI {
       }
     });
 
-    this.toggleBtn?.addEventListener('click', () => this.flipToggle());
+    // Master Toggle switch (Pixel Checkbox)
+    this.toggleBtn?.addEventListener('change', () => this.setProtectionState(this.toggleBtn.checked, true));
+
+    // Turn On CTA Button
+    this.turnOnBtn?.addEventListener('click', () => {
+      this.pressAnim(this.turnOnBtn);
+      this.setProtectionState(true, true);
+    });
 
     document.getElementById('zw-btn-donate')?.addEventListener('click', (e) => {
       e.preventDefault();
       if (typeof chrome !== 'undefined' && chrome.tabs) chrome.tabs.create({ url: 'https://ko-fi.com' });
     });
 
-    // Clicking hero ring manually flips view
+    // Clicking hero ring manually flips view (or activates if disabled)
     this.heroCenterEl?.addEventListener('click', () => {
-      this.toggleHeroMode();
+      if (!this.isOn) {
+        this.setProtectionState(true, true);
+      } else {
+        this.toggleHeroMode();
+      }
     });
 
     // Clicking a dot jumps to that stat
     this.dotsEls.forEach((dot, i) => {
       dot.addEventListener('click', () => {
-        if (i === this.spotIdx) return;
+        if (!this.isOn || i === this.spotIdx) return;
         clearInterval(this.spotTimer!);
         this.renderSpot(i, 'jump');
         this.spotIdx = i;
@@ -391,26 +434,135 @@ class ZenWebPopupUI {
     this.ringFillEl.style.strokeDashoffset = String(CIRC * (1 - Math.min(1, Math.max(0, fraction))));
   }
 
-  private flipToggle() {
-    this.isOn = !this.isOn;
-    this.toggleBtn.setAttribute('aria-pressed', String(this.isOn));
-    this.liveDotEl.classList.toggle('zw--off', !this.isOn);
-    this.toggleTitle.textContent = this.isOn ? 'All Protections ON' : 'All Protections OFF';
-    this.toggleTitle.classList.toggle('zw--off', !this.isOn);
-    this.toggleSub.textContent   = this.isOn ? '7 shields active' : 'Protection paused';
+  /**
+   * Applies the enabled / disabled UI styling and element states.
+   */
+  private applyProtectionState(enabled: boolean, animate = true) {
+    this.isOn = enabled;
+    if (this.toggleBtn) this.toggleBtn.checked = enabled;
+    this.liveDotEl.classList.toggle('zw--off', !enabled);
+    this.toggleTitle.textContent = enabled ? 'All Protections ON' : 'All Protections OFF';
+    this.toggleTitle.classList.toggle('zw--off', !enabled);
+    this.toggleSub.textContent = enabled ? '7 shields active' : 'Protection paused';
 
-    if (this.heroMode === 'status') {
-      this.totalEl.textContent = this.isOn ? 'ACTIVE' : 'PAUSED';
-      this.heroLabelEl.textContent = this.isOn ? '7 SHIELDS ACTIVE' : 'PROTECTION OFF';
+    if (enabled) {
+      this.heroEl.classList.remove('zw--disabled');
+
+      // Update hero text
+      if (this.heroMode === 'status') {
+        this.totalEl.classList.add('zw--text-mode');
+        this.heroLabelEl.classList.add('zw--sub-mode');
+        this.totalEl.textContent = 'ACTIVE';
+        this.heroLabelEl.textContent = '7 SHIELDS ACTIVE';
+      } else {
+        this.totalEl.classList.remove('zw--text-mode');
+        this.heroLabelEl.classList.remove('zw--sub-mode');
+        this.totalEl.textContent = String(this.totalBlocked);
+        this.heroLabelEl.textContent = 'INTERCEPTED';
+      }
+
+      if (animate) {
+        // Animate disabled card out, animate active view in
+        gsap.to(this.disabledCardEl, {
+          scale: 0.9,
+          opacity: 0,
+          y: 10,
+          duration: 0.2,
+          ease: 'power2.in',
+          onComplete: () => {
+            this.disabledCardEl.style.display = 'none';
+            this.activeViewEl.style.display = 'flex';
+            this.renderSpot(this.spotIdx, 'jump');
+            gsap.fromTo(
+              this.activeViewEl,
+              { scale: 0.94, opacity: 0, y: 15 },
+              { scale: 1, opacity: 1, y: 0, duration: 0.45, ease: 'back.out(2)' }
+            );
+          },
+        });
+
+        // Re-illuminate the ring
+        const targetOffset = CIRC * (1 - Math.min(1, Math.max(0, this.totalBlocked / Math.max(this.totalBlocked * 1.3, 60))));
+        if (this.ringFillEl) {
+          gsap.to(this.ringFillEl, {
+            strokeDashoffset: targetOffset,
+            duration: 1.2,
+            ease: 'power3.out',
+          });
+        }
+
+        // Pop the big number
+        gsap.fromTo(
+          this.totalEl,
+          { scale: 0.6, opacity: 0 },
+          { scale: 1, opacity: 1, duration: 0.5, ease: 'back.out(2.5)' }
+        );
+      } else {
+        this.disabledCardEl.style.display = 'none';
+        this.activeViewEl.style.display = 'flex';
+        this.animateRing(this.totalBlocked / Math.max(this.totalBlocked * 1.3, 60));
+      }
+
+      this.startSpotCycle();
+      this.startHeroCycle();
+    } else {
+      // DISABLED STATE
+      this.heroEl.classList.add('zw--disabled');
+
+      // Stop timers
+      if (this.spotTimer) clearInterval(this.spotTimer);
+      if (this.heroTimer) clearInterval(this.heroTimer);
+
+      if (animate) {
+        // Wait for the pixel coin flip (0.4s) to complete its animation before transitioning the view
+        gsap.to(this.activeViewEl, {
+          scale: 0.93,
+          opacity: 0,
+          y: -12,
+          duration: 0.22,
+          delay: 0.42,
+          ease: 'power2.in',
+          onComplete: () => {
+            this.activeViewEl.style.display = 'none';
+            this.disabledCardEl.style.display = 'flex';
+            gsap.fromTo(
+              this.disabledCardEl,
+              { scale: 0.86, opacity: 0, y: 18 },
+              { scale: 1, opacity: 1, y: 0, duration: 0.45, ease: 'back.out(2)' }
+            );
+            // Pulse the circular power switch
+            gsap.fromTo(
+              this.turnOnBtn,
+              { scale: 0.6, opacity: 0, rotation: -45 },
+              { scale: 1, opacity: 1, rotation: 0, duration: 0.55, delay: 0.08, ease: 'back.out(2.8)' }
+            );
+          },
+        });
+      } else {
+        this.activeViewEl.style.display = 'none';
+        this.disabledCardEl.style.display = 'flex';
+      }
+    }
+  }
+
+  /**
+   * Sets protection state, persists to storage, and animates changes.
+   */
+  private async setProtectionState(enabled: boolean, animate = true) {
+    if (this.isOn === enabled && animate) return;
+    this.applyProtectionState(enabled, animate);
+
+
+
+    try {
+      await updateSetting('masterEnabled', enabled);
+    } catch (err) {
+      console.error('Failed to persist setting:', err);
     }
 
-    const thumb = this.toggleBtn.querySelector<HTMLElement>('.zw-toggle-thumb');
-    if (thumb) {
-      gsap.timeline()
-        .to(thumb, { scaleX: 1.35, duration: 0.1, ease: 'power2.in' })
-        .to(thumb, { scaleX: 1,    duration: 0.25, ease: 'back.out(3)' });
+    if (animate) {
+      this.toast(enabled ? '✅ Shields reactivated' : '⏸ Protections paused');
     }
-    this.toast(this.isOn ? '✅ Shields reactivated' : '⏸ Protections paused');
   }
 
   private pressAnim(el: HTMLElement) {
