@@ -283,6 +283,24 @@ body.zw-body {
   opacity: 1;
 }
 
+/* ── META ROW ─────────────────────────────── */
+.zw-meta-row {
+  display: flex; align-items: center; justify-content: center;
+  width: 100%; margin-bottom: 10px; flex-shrink: 0;
+}
+.zw-domain-pill { display: flex; align-items: center; gap: 5px; }
+.zw-live-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: #00ff87; box-shadow: 0 0 7px #00ff87;
+  animation: blink 1.6s infinite; flex-shrink: 0;
+  transition: background 0.4s, box-shadow 0.4s;
+}
+.zw-live-dot.zw--off { background: #566a7f; box-shadow: none; animation: none; }
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.2} }
+.zw-domain-text {
+  font-size: 10px; font-weight: 600; color: var(--t2);
+  max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 .zw-time-badge {
   position: absolute;
   left: 50%;

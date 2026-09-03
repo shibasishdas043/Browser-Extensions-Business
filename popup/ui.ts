@@ -44,10 +44,10 @@ class ZenWebPopupUI {
   private totalEl!:       HTMLElement;
   private heroLabelEl!:   HTMLElement;
   private heroCenterEl!:  HTMLElement;
-  private domainEl:       HTMLElement | null = null;
+  private domainEl!:      HTMLElement;
   private timeSavedEl!:   HTMLElement;
   private ringFillEl!:    SVGCircleElement | null;
-  private liveDotEl:      HTMLElement | null = null;
+  private liveDotEl!:     HTMLElement;
   private spotlightEl!:   HTMLElement;
   private cardEl!:        HTMLElement;
   private iconEl!:        HTMLElement;
@@ -106,10 +106,10 @@ class ZenWebPopupUI {
     this.totalEl           = document.getElementById('hero-blocked-total')!;
     this.heroLabelEl       = document.getElementById('hero-blocked-label')!;
     this.heroCenterEl      = document.getElementById('zw-ring-center')!;
-    this.domainEl          = document.getElementById('zw-page-domain');
+    this.domainEl          = document.getElementById('zw-page-domain')!;
     this.timeSavedEl       = document.getElementById('hero-time-saved')!;
     this.ringFillEl        = document.getElementById('zw-ring-fill') as SVGCircleElement | null;
-    this.liveDotEl         = document.getElementById('zw-live-dot');
+    this.liveDotEl         = document.getElementById('zw-live-dot')!;
     this.spotlightEl       = document.getElementById('zw-spotlight')!;
     this.cardEl            = document.getElementById('zw-spot-card')!;
     this.iconEl            = document.getElementById('zw-spot-icon')!;
@@ -440,7 +440,7 @@ class ZenWebPopupUI {
   private applyProtectionState(enabled: boolean, animate = true) {
     this.isOn = enabled;
     if (this.toggleBtn) this.toggleBtn.checked = enabled;
-    this.liveDotEl?.classList.toggle('zw--off', !enabled);
+    this.liveDotEl.classList.toggle('zw--off', !enabled);
     this.toggleTitle.textContent = enabled ? 'All Protections ON' : 'All Protections OFF';
     this.toggleTitle.classList.toggle('zw--off', !enabled);
     this.toggleSub.textContent = enabled ? '7 shields active' : 'Protection paused';
