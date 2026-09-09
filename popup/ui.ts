@@ -28,13 +28,13 @@ interface StatDef {
 type AnimType = 'flipX' | 'flipY' | 'slam' | 'bounce' | 'spin' | 'glitch' | 'zoom';
 
 const STATS: StatDef[] = [
-  { id:'seo',       label:'SEO Spam Filtered',      icon:'🔍', color:'#00ff87', glow:'rgba(0,255,135,0.09)',   anim:'bounce'  },
-  { id:'pinterest', label:'Pinterest Walls Hidden',  icon:'📌', color:'#ff2d78', glow:'rgba(255,45,120,0.09)',  anim:'flipY'   },
-  { id:'video',     label:'Videos Killed',           icon:'🎬', color:'#ff3b3b', glow:'rgba(255,59,59,0.09)',   anim:'slam'    },
-  { id:'recipe',    label:'Recipe Jumps',            icon:'🍳', color:'#ffcc00', glow:'rgba(255,204,0,0.08)',   anim:'spin'    },
-  { id:'overlay',   label:'Overlays Smashed',        icon:'🛡️', color:'#bf5af2', glow:'rgba(191,90,242,0.09)',  anim:'flipX'   },
-  { id:'download',  label:'Fakes Defused',           icon:'🛑', color:'#ff6b00', glow:'rgba(255,107,0,0.09)',   anim:'glitch'  },
-  { id:'form',      label:'Forms Salvaged',          icon:'✍️', color:'#00cfff', glow:'rgba(0,207,255,0.09)',   anim:'zoom'    },
+  { id:'seo',       label:'SEO Spam Filtered',      icon:'🔍', color:'#10b981', glow:'rgba(16,185,129,0.09)',   anim:'bounce'  },
+  { id:'pinterest', label:'Pinterest Walls Hidden',  icon:'📌', color:'#f43f5e', glow:'rgba(244,63,94,0.09)',    anim:'flipY'   },
+  { id:'video',     label:'Videos Killed',           icon:'🎬', color:'#ef4444', glow:'rgba(239,68,68,0.09)',    anim:'slam'    },
+  { id:'recipe',    label:'Recipe Jumps',            icon:'🍳', color:'#f59e0b', glow:'rgba(245,158,11,0.08)',   anim:'spin'    },
+  { id:'overlay',   label:'Overlays Smashed',        icon:'🛡️', color:'#a855f7', glow:'rgba(168,85,247,0.09)',   anim:'flipX'   },
+  { id:'download',  label:'Fakes Defused',           icon:'🛑', color:'#f97316', glow:'rgba(249,115,22,0.09)',   anim:'glitch'  },
+  { id:'form',      label:'Forms Salvaged',          icon:'✍️', color:'#06b6d4', glow:'rgba(6,182,212,0.09)',    anim:'zoom'    },
 ];
 
 const INTERVAL_MS = 2600;
@@ -44,10 +44,8 @@ class ZenWebPopupUI {
   private totalEl!:       HTMLElement;
   private heroLabelEl!:   HTMLElement;
   private heroCenterEl!:  HTMLElement;
-  private domainEl!:      HTMLElement;
   private timeSavedEl!:   HTMLElement;
   private ringFillEl!:    SVGCircleElement | null;
-  private liveDotEl!:     HTMLElement;
   private spotlightEl!:   HTMLElement;
   private cardEl!:        HTMLElement;
   private iconEl!:        HTMLElement;
@@ -85,7 +83,6 @@ class ZenWebPopupUI {
   private async init() {
     this.bindRefs();
     this.bindEvents();
-    await this.detectDomain();
     await this.loadStats();
 
     // Load persisted settings
@@ -106,10 +103,8 @@ class ZenWebPopupUI {
     this.totalEl           = document.getElementById('hero-blocked-total')!;
     this.heroLabelEl       = document.getElementById('hero-blocked-label')!;
     this.heroCenterEl      = document.getElementById('zw-ring-center')!;
-    this.domainEl          = document.getElementById('zw-page-domain')!;
     this.timeSavedEl       = document.getElementById('hero-time-saved')!;
     this.ringFillEl        = document.getElementById('zw-ring-fill') as SVGCircleElement | null;
-    this.liveDotEl         = document.getElementById('zw-live-dot')!;
     this.spotlightEl       = document.getElementById('zw-spotlight')!;
     this.cardEl            = document.getElementById('zw-spot-card')!;
     this.iconEl            = document.getElementById('zw-spot-icon')!;
@@ -183,15 +178,7 @@ class ZenWebPopupUI {
     });
   }
 
-  private async detectDomain() {
-    try {
-      if (typeof chrome !== 'undefined' && chrome.tabs) {
-        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
-        if (tab?.url) { this.domainEl.textContent = new URL(tab.url).hostname; return; }
-      }
-    } catch { /* ignore */ }
-    this.domainEl.textContent = 'Active session';
-  }
+
 
   private async loadStats() {
     try {
@@ -207,7 +194,9 @@ class ZenWebPopupUI {
       setTimeout(() => this.animateRing(total / Math.max(total * 1.3, 60)), 100);
 
       const mins = (s.totalTimeSavedSeconds / 60).toFixed(1);
-      if (this.timeSavedEl) this.timeSavedEl.textContent = `~${mins}m saved`;
+      if (this.timeSavedEl) {
+        this.timeSavedEl.textContent = `~${mins}m saved`;
+      }
     } catch (e) {
       console.error('[ZenWeb]', e);
     }
@@ -440,7 +429,6 @@ class ZenWebPopupUI {
   private applyProtectionState(enabled: boolean, animate = true) {
     this.isOn = enabled;
     if (this.toggleBtn) this.toggleBtn.checked = enabled;
-    this.liveDotEl.classList.toggle('zw--off', !enabled);
     this.toggleTitle.textContent = enabled ? 'All Protections ON' : 'All Protections OFF';
     this.toggleTitle.classList.toggle('zw--off', !enabled);
     this.toggleSub.textContent = enabled ? '7 shields active' : 'Protection paused';

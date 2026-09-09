@@ -13,14 +13,8 @@
     <header class="zw-topbar">
       <div class="zw-brand">
         <div class="zw-shield-mini">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-            <path d="M12 2L3 6.5V12c0 5.25 3.75 10.15 9 11.35C17.25 22.15 21 17.25 21 12V6.5L12 2z" fill="url(#g1)"/>
-            <path d="M9 12l2 2 4-4" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            <defs>
-              <linearGradient id="g1" x1="3" y1="2" x2="21" y2="23" gradientUnits="userSpaceOnUse">
-                <stop stop-color="#00ff87"/><stop offset="1" stop-color="#00cfff"/>
-              </linearGradient>
-            </defs>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="#10b981" stroke="#10b981" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
           </svg>
         </div>
         <span class="zw-wordmark">ZenWeb</span>
@@ -72,13 +66,6 @@
           </div>
         </div>
 
-        <!-- Domain -->
-        <div class="zw-meta-row">
-          <div class="zw-domain-pill">
-            <span class="zw-live-dot" id="zw-live-dot"></span>
-            <span class="zw-domain-text" id="zw-page-domain">Active session</span>
-          </div>
-        </div>
 
         <div class="zw-sep"></div>
 
@@ -126,9 +113,9 @@
         <!-- Spotlight: one stat at a time — fills remaining space -->
         <div class="zw-spotlight" id="zw-spotlight" aria-live="polite">
           <div class="zw-spot-card" id="zw-spot-card">
-            <span class="zw-spot-icon" id="zw-spot-icon">🔍</span>
-            <div class="zw-spot-body">
-              <span class="zw-spot-label" id="zw-spot-label">SEO Spam Filtered</span>
+            <span class="zw-spot-label" id="zw-spot-label">SEO Spam Filtered</span>
+            <div class="zw-spot-stat-row">
+              <span class="zw-spot-icon" id="zw-spot-icon">🔍</span>
               <span class="zw-spot-count" id="zw-spot-count">0</span>
             </div>
           </div>
@@ -141,7 +128,28 @@
             <span class="zw-donation-title">Enjoying ZenWeb?</span>
             <span class="zw-donation-sub">Support development</span>
           </div>
-          <a class="zw-donate-btn" id="zw-btn-donate" href="#">Donate</a>
+          <button class="pay-btn" id="zw-btn-donate" type="button" aria-label="Donate Now">
+            <span class="btn-text-wrap">
+              <span class="btn-text">Donate</span><span class="btn-text-now">Now</span>
+            </span>
+            <div class="icon-container">
+              <svg viewBox="0 0 24 24" class="icon card-icon">
+                <path d="M20,8H4V6H20M20,18H4V12H20M20,4H4C2.89,4 2,4.89 2,6V18C2,19.11 2.89,20 4,20H20C21.11,20 22,19.11 22,18V6C22,4.89 21.11,4 20,4Z" fill="currentColor" />
+              </svg>
+              <svg viewBox="0 0 24 24" class="icon payment-icon">
+                <path d="M2,17H22V21H2V17M6.25,7H9V6H6V3H18V6H15V7H17.75L19,17H5L6.25,7M9,10H15V8H9V10M9,13H15V11H9V13Z" fill="currentColor" />
+              </svg>
+              <svg viewBox="0 0 24 24" class="icon dollar-icon">
+                <path d="M11.8 10.9c-2.27-.59-3-1.2-3-2.15 0-1.09 1.01-1.85 2.7-1.85 1.78 0 2.44.85 2.5 2.1h2.21c-.07-1.72-1.12-3.3-3.21-3.81V3h-3v2.16c-1.94.42-3.5 1.68-3.5 3.61 0 2.31 1.91 3.46 4.7 4.13 2.5.6 3 1.48 3 2.41 0 .69-.49 1.79-2.7 1.79-2.06 0-2.87-.92-2.98-2.1h-2.2c.12 2.19 1.76 3.42 3.68 3.83V21h3v-2.15c1.95-.37 3.5-1.5 3.5-3.55 0-2.84-2.43-3.81-4.7-4.4z" fill="currentColor" />
+              </svg>
+              <svg viewBox="0 0 24 24" class="icon wallet-icon default-icon">
+                <path d="M21,18V19A2,2 0 0,1 19,21H5C3.89,21 3,20.1 3,19V5A2,2 0 0,1 5,3H19A2,2 0 0,1 21,5V6H12C10.89,6 10,6.9 10,8V16A2,2 0 0,0 12,18M12,16H22V8H12M16,13.5A1.5,1.5 0 0,1 14.5,12A1.5,1.5 0 0,1 16,10.5A1.5,1.5 0 0,1 17.5,12A1.5,1.5 0 0,1 16,13.5Z" fill="currentColor" />
+              </svg>
+              <svg viewBox="0 0 24 24" class="icon check-icon">
+                <path d="M9,16.17L4.83,12L3.41,13.41L9,19L21,7L19.59,5.59L9,16.17Z" fill="currentColor" />
+              </svg>
+            </div>
+          </button>
         </div>
       </div>
 
