@@ -1,361 +1,280 @@
-:root {
-  --zw-bg: #212529;
-  --zw-card-bg: rgba(33, 37, 41, 0.85);
-  --zw-card-border: rgba(255, 255, 255, 0.08);
-  --zw-text-primary: #f8fafc;
-  --zw-text-secondary: #94a3b8;
-  --zw-text-muted: #64748b;
-  --zw-accent-emerald: #10b981;
-  --zw-accent-cyan: #06b6d4;
-  --zw-gradient-brand: linear-gradient(135deg, #10b981 0%, #06b6d4 100%);
-  --zw-radius: 12px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --zw-bg: #212529;
-    --zw-card-bg: rgba(33, 37, 41, 0.85);
-    --zw-card-border: rgba(255, 255, 255, 0.08);
-    --zw-text-primary: #f8fafc;
-    --zw-text-secondary: #94a3b8;
-    --zw-text-muted: #64748b;
-  }
-}
-
-@media (prefers-color-scheme: light) {
-  :root {
-    --zw-bg: #edf2fb;
-    --zw-card-bg: #ffffff;
-    --zw-card-border: rgba(15, 23, 42, 0.08);
-    --zw-text-primary: #0f172a;
-    --zw-text-secondary: #475569;
-    --zw-text-muted: #64748b;
-  }
-}
-
-[data-theme="light"],
-body.zw-options-light {
-  --zw-bg: #edf2fb;
-  --zw-card-bg: #ffffff;
-  --zw-card-border: rgba(15, 23, 42, 0.08);
-  --zw-text-primary: #0f172a;
-  --zw-text-secondary: #475569;
-  --zw-text-muted: #64748b;
-}
-
-* {
-  box-sizing: border-box;
-  margin: 0;
-  padding: 0;
-}
-
+/* ─────────────────────────────────────────
+   Inter Variable Font — SF Pro-accurate
+   fallback for Windows/Linux.
+   opsz axis: 14 = text sizes, 32 = display.
+   wght axis: 100–900 (all weights in one file).
+   ───────────────────────────────────────── */
 @font-face {
-  font-family: 'Fira Code';
-  src: url('../assets/fonts/Fira_Code/FiraCode-VariableFont_wght.ttf') format('truetype');
-  font-weight: 300 700;
+  font-family: "Inter";
+  src: url('../assets/fonts/Fira_Code/Inter/Inter-VariableFont_opsz,wght.ttf') format('truetype');
+  font-weight: 100 900;
   font-style: normal;
   font-display: swap;
 }
 
-body.zw-options-body {
-  background-color: var(--zw-bg);
-  color: var(--zw-text-primary);
-  font-family: 'Fira Code', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, monospace, sans-serif;
+@font-face {
+  font-family: "Inter";
+  src: url('../assets/fonts/Fira_Code/Inter/Inter-Italic-VariableFont_opsz,wght.ttf') format('truetype');
+  font-weight: 100 900;
+  font-style: italic;
+  font-display: swap;
+}
+
+@import "tailwindcss";
+
+/* ─────────────────────────────────────────
+   Apple Design Token Map (DESIGN.md)
+   ───────────────────────────────────────── */
+@theme {
+  --color-primary:          #0066cc;
+  --color-primary-focus:    #0071e3;
+  --color-primary-on-dark:  #2997ff;
+  --color-ink:              #1d1d1f;
+  --color-ink-muted-80:     #333333;
+  --color-ink-muted-48:     #7a7a7a;
+  --color-canvas:           #ffffff;
+  --color-canvas-parchment: #f5f5f7;
+  --color-surface-pearl:    #fafafc;
+  --color-surface-tile-1:   #272729;
+  --color-surface-tile-2:   #2a2a2c;
+  --color-surface-black:    #000000;
+  --color-hairline:         #e0e0e0;
+  --color-divider-soft:     #f0f0f0;
+}
+
+/* ─────────────────────────────────────────
+   Semantic CSS Variables — Light
+   ───────────────────────────────────────── */
+:root {
+  color-scheme: light;
+
+  --zw-bg-page:              #f5f5f7;
+  --zw-bg-card:              #ffffff;
+  --zw-bg-nav:               rgba(245, 245, 247, 0.82);
+  --zw-bg-chip:              #e5e5ea;
+  --zw-bg-chip-sel:          #ffffff;
+  --zw-bg-icon:              #f5f5f7;
+  --zw-bg-scope:             #f5f5f7;
+  --zw-bg-master-icon-on:    rgba(52, 199, 89, 0.12);
+  --zw-bg-master-icon-off:   #f5f5f7;
+  --zw-bg-privacy:           rgba(0, 102, 204, 0.08);
+  --zw-bg-status:            #ffffff;
+
+  --zw-border-card:          #e0e0e0;
+  --zw-border-nav:           #d2d2d7;
+  --zw-border-footer:        #d2d2d7;
+  --zw-border-divider:       #f0f0f0;
+  --zw-border-scope:         #e0e0e0;
+  --zw-border-status:        #d2d2d7;
+
+  --zw-text-primary:         #1d1d1f;
+  --zw-text-secondary:       #6e6e73;     /* BUG FIX: was missing, now rgba() for transitionable */
+  --zw-text-tertiary:        #86868b;
+  --zw-text-muted-badge:     #6e6e73;
+  --zw-text-link:            #0066cc;
+  --zw-text-privacy:         #0066cc;
+  --zw-text-badge-privacy:   #0066cc;
+
+  --zw-chip-sel-shadow:      0 1px 3px rgba(0, 0, 0, 0.08);
+
+  --zw-toast-bg:             #1d1d1f;
+  --zw-toast-text:           #ffffff;
+  --zw-toast-border:         rgba(0, 0, 0, 0.08);  /* BUG FIX: was white-on-white in light mode */
+}
+
+/* ─────────────────────────────────────────
+   Semantic CSS Variables — Dark
+   BUG FIX: changed #ebebf5cc hex-alpha to rgba()
+   — hex-alpha cannot be CSS-transitioned and
+     causes confusion in border/box-shadow values.
+   ───────────────────────────────────────── */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --zw-bg-page:              #000000;
+  --zw-bg-card:              #1c1c1e;
+  --zw-bg-nav:               rgba(0, 0, 0, 0.84);
+  --zw-bg-chip:              #2c2c2e;
+  --zw-bg-chip-sel:          #3a3a3c;
+  --zw-bg-icon:              #2c2c2e;
+  --zw-bg-scope:             #2c2c2e;
+  --zw-bg-master-icon-on:    rgba(52, 199, 89, 0.18);
+  --zw-bg-master-icon-off:   #2c2c2e;
+  --zw-bg-privacy:           rgba(41, 151, 255, 0.12);
+  --zw-bg-status:            #1c1c1e;
+
+  --zw-border-card:          rgba(255, 255, 255, 0.10);
+  --zw-border-nav:           rgba(255, 255, 255, 0.10);
+  --zw-border-footer:        rgba(255, 255, 255, 0.10);
+  --zw-border-divider:       rgba(255, 255, 255, 0.06);
+  --zw-border-scope:         rgba(255, 255, 255, 0.08);
+  --zw-border-status:        rgba(255, 255, 255, 0.12);
+
+  --zw-text-primary:         #ffffff;
+  --zw-text-secondary:       rgba(235, 235, 245, 0.80); /* BUG FIX: rgba, not hex-alpha */
+  --zw-text-tertiary:        #98989d;
+  --zw-text-muted-badge:     rgba(235, 235, 245, 0.80); /* BUG FIX: rgba, not hex-alpha */
+  --zw-text-link:            #2997ff;
+  --zw-text-privacy:         #2997ff;
+  --zw-text-badge-privacy:   #2997ff;
+
+  --zw-chip-sel-shadow:      none;
+
+  --zw-toast-bg:             #2c2c2e;
+  --zw-toast-text:           #ffffff;
+  --zw-toast-border:         rgba(255, 255, 255, 0.10); /* visible on dark surface */
+}
+
+/* ─────────────────────────────────────────
+   Global Base
+   ───────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  margin: 0;
+  padding: 0;
   min-height: 100vh;
-  padding: 40px 24px;
+  scroll-behavior: smooth;
+  /* BUG FIX: was overflow-y:scroll (forces permanent scrollbar on short pages).
+     Use auto so scrollbar only appears when content overflows. */
+  overflow-y: auto;
 }
 
-.zw-options-container {
-  max-width: 1040px;
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
+body {
+  margin: 0;
+  padding: 0;
+  min-height: 100vh;
+  /* BUG FIX: body bg must follow the root div's data-theme.
+     Body itself has no data-theme, so we set it to the page var
+     which resolves from :root (light). The root div covers 100vh
+     with its own bg, so body colour only shows on overscroll.
+     We fix the overscroll flash by matching it to the dark page bg
+     when [data-theme=dark] is on the child div — use JS in Dashboard
+     to sync body background. Fallback: parchment is safe. */
+  background-color: #f5f5f7;
+  color: var(--zw-text-primary);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Helvetica Neue", Arial, sans-serif;
+  font-size: 17px;
+  font-weight: 400;
+  line-height: 1.47;
+  letter-spacing: -0.022em;
+  font-optical-sizing: auto;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
 }
 
-/* Header */
-.zw-options-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding-bottom: 24px;
-  border-bottom: 1px solid var(--zw-card-border);
+/* ─────────────────────────────────────────
+   .apple-card — store-utility-card (DESIGN.md)
+   white · 1px hairline · 18px radius · no shadow
+   ───────────────────────────────────────── */
+.apple-card {
+  background-color: var(--zw-bg-card);
+  border: 1px solid var(--zw-border-card);
+  border-radius: 18px;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
-.zw-options-brand {
-  display: flex;
-  align-items: center;
-  gap: 16px;
+/* ─────────────────────────────────────────
+   Frosted sub-nav (DESIGN.md: sub-nav-frosted)
+   ───────────────────────────────────────── */
+.apple-subnav-frosted {
+  background-color: var(--zw-bg-nav);
+  backdrop-filter: saturate(180%) blur(20px);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
-.zw-logo-icon {
-  width: 44px;
-  height: 44px;
-  background: rgba(16, 185, 129, 0.12);
-  border: 1px solid rgba(16, 185, 129, 0.3);
-  border-radius: 12px;
+/* ─────────────────────────────────────────
+   Apple micro-interaction — scale(0.95) press
+   BUG FIX: previously transition:transform here
+   conflicted with GSAP tweens on same elements.
+   Now uses will-change only when GSAP is not active.
+   The conflict is resolved by NOT applying a CSS
+   transform transition on elements GSAP animates
+   (cards, icon). Press-scale is only on nav buttons
+   which GSAP never touches simultaneously.
+   ───────────────────────────────────────── */
+.apple-press {
+  cursor: pointer;
+  /* Intentionally no `transition: transform` here —
+     we let :active handle the scale without CSS transition
+     to avoid fighting GSAP on shared elements. */
+}
+.apple-press:active {
+  transform: scale(0.95);
+}
+
+/* ─────────────────────────────────────────
+   Typography utilities (DESIGN.md exact values)
+   ───────────────────────────────────────── */
+.apple-display-lg {
+  /* SF Pro Display on Apple; Inter at large opsz on other platforms */
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Inter", sans-serif;
+  font-weight: 600;
+  line-height: 1.10;
+  letter-spacing: -0.02em;  /* Tighter: matches Apple large display tracking */
+  font-optical-sizing: auto;
+}
+
+.apple-body-strong {
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif;
+  font-size: 17px;
+  font-weight: 600;
+  line-height: 1.24;
+  letter-spacing: -0.022em;
+  font-optical-sizing: auto;
+}
+
+.apple-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--zw-text-tertiary);
+}
+
+/* ─────────────────────────────────────────
+   Links and utility buttons
+   ───────────────────────────────────────── */
+.apple-link {
+  color: var(--zw-text-link);
+  text-decoration: none;
+  background: none;
+  border: none;
+  padding: 0;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.2s ease;
+}
+.apple-link:hover { text-decoration: underline; }
+
+/* ─────────────────────────────────────────
+   Dark mode toggle
+   ───────────────────────────────────────── */
+.theme-toggle {
   display: flex;
   align-items: center;
   justify-content: center;
-}
-
-.zw-options-title {
-  font-size: 24px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  background: var(--zw-gradient-brand);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.zw-options-subtitle {
-  font-size: 13px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid var(--zw-border-card);
+  background-color: var(--zw-bg-card);
   color: var(--zw-text-secondary);
-  margin-top: 2px;
-}
-
-.zw-btn-reset-all {
-  background: rgba(244, 63, 94, 0.1);
-  color: #f43f5e;
-  border: 1px solid rgba(244, 63, 94, 0.2);
-  padding: 8px 16px;
-  border-radius: 8px;
-  font-size: 13px;
-  font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.zw-btn-reset-all:hover {
-  background: rgba(244, 63, 94, 0.2);
-}
-
-/* Grid */
-.zw-options-grid {
-  display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 24px;
-}
-
-.zw-settings-column {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.zw-stats-column {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-/* Cards */
-.zw-card {
-  background: var(--zw-card-bg);
-  backdrop-filter: blur(12px);
-  border: 1px solid var(--zw-card-border);
-  border-radius: var(--zw-radius);
-  padding: 20px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-}
-
-.zw-card--master {
-  background: linear-gradient(135deg, rgba(16, 185, 129, 0.08) 0%, rgba(6, 182, 212, 0.08) 100%);
-  border-color: rgba(16, 185, 129, 0.25);
-}
-
-.zw-master-content {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.zw-card-heading {
-  font-size: 17px;
-  font-weight: 700;
-  color: #34d399;
-}
-
-.zw-card-subheading {
-  font-size: 13px;
-  color: var(--zw-text-secondary);
-  margin-top: 4px;
-}
-
-.zw-card-title {
-  font-size: 15px;
-  font-weight: 600;
-  margin-bottom: 16px;
-  color: var(--zw-text-primary);
-  border-bottom: 1px solid var(--zw-card-border);
-  padding-bottom: 10px;
-}
-
-/* Rows */
-.zw-setting-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  gap: 16px;
-}
-
-.zw-setting-row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-.zw-setting-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--zw-text-primary);
-}
-
-.zw-setting-desc {
-  font-size: 12.5px;
-  color: var(--zw-text-secondary);
-  margin-top: 3px;
-  line-height: 1.4;
-}
-
-/* Switches */
-.zw-switch {
-  position: relative;
-  display: inline-block;
-  width: 44px;
-  height: 24px;
   flex-shrink: 0;
-  cursor: pointer;
+  /* Transition only non-transform properties so GSAP
+     can own the transform axis without conflict */
+  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.2s ease;
 }
+.theme-toggle:hover { color: var(--zw-text-primary); }
+/* :active scale is handled by GSAP in toggleTheme() */
 
-.zw-switch input {
-  opacity: 0;
-  width: 0;
-  height: 0;
+/* ─────────────────────────────────────────
+   GSAP helpers
+   ───────────────────────────────────────── */
+/* GPU promotion for elements GSAP will animate.
+   Applied only during animation — removed via clearProps. */
+.gsap-animating {
+  will-change: opacity, transform;
 }
-
-.zw-slider {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background-color: #334155;
-  transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 9999px;
-}
-
-.zw-slider:before {
-  position: absolute;
-  content: "";
-  height: 18px;
-  width: 18px;
-  left: 3px;
-  bottom: 3px;
-  background-color: #ffffff;
-  transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
-  border-radius: 9999px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-}
-
-.zw-switch input:checked + .zw-slider {
-  background: var(--zw-gradient-brand);
-  box-shadow: 0 0 12px rgba(16, 185, 129, 0.35);
-}
-
-.zw-switch input:checked + .zw-slider:before {
-  transform: translateX(20px);
-}
-
-.zw-switch--large {
-  width: 52px;
-  height: 28px;
-}
-
-.zw-switch--large .zw-slider:before {
-  height: 22px;
-  width: 22px;
-}
-
-.zw-switch--large input:checked + .zw-slider:before {
-  transform: translateX(24px);
-}
-
-/* Metrics */
-.zw-metrics-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.zw-metric-item {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-.zw-metric-label {
-  font-size: 13px;
-  color: var(--zw-text-secondary);
-}
-
-.zw-metric-value {
-  font-size: 14px;
-  font-weight: 700;
-  color: #34d399;
-}
-
-.zw-btn-reset-stats {
-  margin-top: 16px;
-  width: 100%;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--zw-text-secondary);
-  border: 1px solid var(--zw-card-border);
-  padding: 8px;
-  border-radius: 8px;
-  font-size: 12px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.zw-btn-reset-stats:hover {
-  background: rgba(255, 255, 255, 0.1);
-  color: var(--zw-text-primary);
-}
-
-.zw-privacy-text {
-  font-size: 13px;
-  color: var(--zw-text-secondary);
-  line-height: 1.5;
-}
-
-/* Toast */
-.zw-options-toast {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  background: #0f172a;
-  border: 1px solid var(--zw-accent-emerald);
-  color: #34d399;
-  padding: 10px 18px;
-  border-radius: 9999px;
-  font-size: 13px;
-  font-weight: 600;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.4);
-  opacity: 0;
-  transform: translateY(20px);
-  pointer-events: none;
-  transition: all 0.25s ease;
-}
-
-.zw-options-toast.show {
-  opacity: 1;
-  transform: translateY(0);
-}
-

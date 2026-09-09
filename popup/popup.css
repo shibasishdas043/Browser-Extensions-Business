@@ -162,24 +162,24 @@ body.zw-body {
   transition: transform 0.35s var(--ease), stroke 0.2s var(--ease);
 }
 
-/* Refresh Button Hover & Glow */
+/* Refresh Button Hover — flat darker green */
 .zw-icon-btn.zw-btn-refresh:hover {
-  background: rgba(0, 255, 135, 0.12);
-  border-color: rgba(0, 255, 135, 0.4);
-  color: #00ff87;
-  box-shadow: 0 0 14px rgba(0, 255, 135, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  background: #166534;
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   transform: translateY(-1px);
 }
 .zw-icon-btn.zw-btn-refresh:hover .zw-icon-svg {
   transform: rotate(180deg);
 }
 
-/* Settings Button Hover & Glow */
+/* Settings Button Hover — flat darker cyan */
 .zw-icon-btn.zw-btn-settings:hover {
-  background: rgba(0, 207, 255, 0.12);
-  border-color: rgba(0, 207, 255, 0.4);
-  color: #00cfff;
-  box-shadow: 0 0 14px rgba(0, 207, 255, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+  background: #0e4a68;
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
   transform: translateY(-1px);
 }
 .zw-icon-btn.zw-btn-settings:hover .zw-icon-svg {
@@ -461,23 +461,20 @@ body.zw--light .zw-time-badge {
   transition: all 0.35s var(--ease);
 }
 
-/* Glowing Neon Hover & Active State */
+/* Flat Darker Hover & Active State */
 .zw-power-switch:hover {
-  transform: scale(1.08);
-  box-shadow: 0px 0px 2px rgb(151, 243, 255) inset,
-    0px 0px 4px rgb(151, 243, 255) inset, 0px 0px 14px rgb(151, 243, 255) inset,
-    0px 0px 40px rgba(0, 255, 135, 0.7), 0px 0px 80px rgba(0, 207, 255, 0.45),
-    0px 0px 8px rgb(151, 243, 255);
-  border: 2px solid rgb(255, 255, 255);
-  background-color: rgb(22, 50, 58);
+  transform: scale(1.05);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  background-color: #1a2a32;
 }
 
 .zw-power-switch:hover .zw-power-svg {
-  filter: drop-shadow(0px 0px 8px rgb(151, 243, 255));
+  filter: none;
 }
 
 .zw-power-switch:hover .zw-power-svg path {
-  fill: rgb(255, 255, 255);
+  fill: #ffffff;
   opacity: 1;
 }
 
@@ -526,12 +523,12 @@ body.zw--light .zw-time-badge {
   0%, 100% {
     opacity: 1;
     color: #ffffff;
-    text-shadow: 0 0 0 rgba(255, 69, 58, 0);
+    text-shadow: none;
   }
   50% {
-    opacity: 0.9;
+    opacity: 0.88;
     color: #ffffff;
-    text-shadow: 0 0 14px rgba(255, 69, 58, 0.65), 0 0 28px rgba(255, 69, 58, 0.35);
+    text-shadow: none;
   }
 }
 
@@ -992,14 +989,28 @@ body.zw--light .pay-btn {
 .zw-toast {
   position: fixed; bottom: 12px; left: 50%;
   transform: translateX(-50%) translateY(36px);
-  background: #0c1a0f; border: 1px solid #00ff87; color: #00ff87;
-  padding: 5px 13px; border-radius: 99px;
-  font-size: 10px; font-weight: 700;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.6), 0 0 12px rgba(0,255,135,0.2);
+  background: #2b3038; border: 1px solid rgba(255, 255, 255, 0.12); color: #ffffff;
+  padding: 5px 14px; border-radius: 99px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.2px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
   opacity: 0; pointer-events: none; transition: all 0.22s var(--ease);
   z-index: 9999; white-space: nowrap;
 }
 .zw-toast.zw-toast--visible { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+/* Activated state — flat darker green */
+.zw-toast.zw-toast--active {
+  background: #166534;
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
+
+/* Deactivated state — flat darker red */
+.zw-toast.zw-toast--deactive {
+  background: #8b1e1e;
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #ffffff;
+}
 
 /* ── ENTRY ANIMATIONS ─────────────────────── */
 @keyframes fadeUp {

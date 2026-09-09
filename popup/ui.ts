@@ -544,7 +544,7 @@ class ZenWebPopupUI {
     }
 
     if (animate) {
-      this.toast(enabled ? '✅ Shields reactivated' : '⏸ Protections paused');
+      this.toast(enabled ? '✅ Shields reactivated' : '⏸ Protections paused', enabled ? 'active' : 'deactive');
     }
   }
 
@@ -554,14 +554,28 @@ class ZenWebPopupUI {
       .to(el, { scale: 1,    duration: 0.18, ease: 'back.out(2)' });
   }
 
-  private toast(msg: string) {
+  private toast(msg: string, type?: 'active' | 'deactive' | 'neutral') {
     if (this.toastTimer) clearTimeout(this.toastTimer);
     this.toastMsgEl.textContent = msg;
+
+    this.toastEl.classList.remove('zw-toast--active', 'zw-toast--deactive', 'zw-toast--neutral');
+    const resolvedType = type || (
+      msg.includes('paused') || msg.includes('deactivated') || msg.includes('disabled')
+        ? 'deactive'
+        : msg.includes('reactivated') || msg.includes('active') || msg.includes('enabled')
+        ? 'active'
+        : 'neutral'
+    );
+    this.toastEl.classList.add(`zw-toast--${resolvedType}`);
     this.toastEl.classList.add('zw-toast--visible');
+
     gsap.fromTo(this.toastEl, { scale: 0.85, opacity: 0, y: 20 }, { scale: 1, opacity: 1, y: 0, duration: 0.25, ease: 'back.out(2)' });
     this.toastTimer = window.setTimeout(() => {
       gsap.to(this.toastEl, { opacity: 0, y: 14, scale: 0.93, duration: 0.18, ease: 'power2.in',
-        onComplete: () => this.toastEl.classList.remove('zw-toast--visible') });
+        onComplete: () => {
+          this.toastEl.classList.remove('zw-toast--visible', 'zw-toast--active', 'zw-toast--deactive', 'zw-toast--neutral');
+        }
+      });
     }, 2600);
   }
 }

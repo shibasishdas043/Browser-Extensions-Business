@@ -1,6 +1,8 @@
 import { defineConfig, Plugin } from 'vite';
 import { fileURLToPath } from 'node:url';
 import { copyFileSync } from 'node:fs';
+import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 
 function copyManifestPlugin(): Plugin {
   return {
@@ -14,7 +16,12 @@ function copyManifestPlugin(): Plugin {
 }
 
 export default defineConfig({
-  plugins: [copyManifestPlugin()],
+  plugins: [react(), tailwindcss(), copyManifestPlugin()],
+  resolve: {
+    alias: {
+      '@': fileURLToPath(new URL('./', import.meta.url)),
+    },
+  },
   build: {
     outDir: 'dist',
     emptyOutDir: true,
