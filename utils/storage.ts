@@ -76,7 +76,7 @@ export async function updateSetting<K extends SettingKey>(
 }
 
 /**
- * Subscribes to storage change events.
+ * Subscribes to settings change events.
  */
 export function onSettingsChange(callback: (newSettings: ZenWebSettings) => void): void {
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
@@ -84,6 +84,20 @@ export function onSettingsChange(callback: (newSettings: ZenWebSettings) => void
       if (areaName === 'local' && changes[SETTINGS_STORAGE_KEY]) {
         const newSettings = changes[SETTINGS_STORAGE_KEY].newValue as ZenWebSettings;
         callback({ ...DEFAULT_SETTINGS, ...newSettings });
+      }
+    });
+  }
+}
+
+/**
+ * Subscribes to protection stats change events in real-time.
+ */
+export function onStatsChange(callback: (newStats: ProtectionStats) => void): void {
+  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
+    chrome.storage.onChanged.addListener((changes, areaName) => {
+      if (areaName === 'local' && changes[STATS_STORAGE_KEY]) {
+        const newStats = changes[STATS_STORAGE_KEY].newValue as ProtectionStats;
+        callback({ ...DEFAULT_STATS, ...newStats });
       }
     });
   }

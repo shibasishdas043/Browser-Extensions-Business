@@ -12,7 +12,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import {
   getSettings, updateSetting, saveSettings,
-  DEFAULT_SETTINGS, getStats, resetStats, onSettingsChange,
+  DEFAULT_SETTINGS, getStats, resetStats, onSettingsChange, onStatsChange,
 } from '@/utils/storage';
 import { ZenWebSettings, ProtectionStats, SettingKey } from '@/types';
 
@@ -32,12 +32,12 @@ interface ProtectionItem {
 }
 
 const PROTECTIONS: ProtectionItem[] = [
+  { key: 'fakeDownloadGuardEnabled', statKey: 'fakeDownloadsDefused', category: 'security', categoryLabel: 'Security & Privacy', name: 'Deceptive Download Guard',      description: 'Visibly flags and quarantines deceptive download advertising banners impersonating files.',                                 targetScope: 'File Portals & Mirrors',  icon: AlertTriangle, statUnit: 'trap banners defused'     },
   { key: 'humanSearchEnabled',       statKey: 'seoSpamFiltered',      category: 'search',   categoryLabel: 'Search & Discovery', name: 'Human Search Bypass',           description: 'Injects community discussions and forum filters into search engines to bypass bloated AI content mills.',                    targetScope: 'Google & Search Engines', icon: Search,        statUnit: 'spam results bypassed'    },
   { key: 'pinterestBlockerEnabled',  statKey: 'pinterestHidden',      category: 'search',   categoryLabel: 'Search & Discovery', name: 'Pinterest Wall Demolisher',     description: 'Silently conceals Pinterest boards and forced-signup preview walls from image search results.',                             targetScope: 'Image & Web Search',      icon: PinOff,        statUnit: 'walled pins hidden'       },
   { key: 'floatingVideoKillerEnabled',statKey: 'videosSuppressed',    category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Sticky Video Suppressor',       description: 'Neutralizes picture-in-picture commercial players that float and follow your viewport scroll.',                            targetScope: 'News & Media Outlets',    icon: VideoOff,      statUnit: 'floating players silenced'},
   { key: 'recipeSkipperEnabled',     statKey: 'recipesSkipped',       category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Recipe Story Fluff Skipper',   description: 'Parses recipe JSON-LD schema to auto-surface ingredients and instructions instantly without life stories.',                  targetScope: 'Food & Cooking Sites',    icon: ChefHat,       statUnit: 'stories skipped'          },
   { key: 'autoOverlaySmasherEnabled',statKey: 'overlaysSmashed',      category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Modal & Paywall Smasher',      description: 'Detects screen-darkening newsletter modals, smashing backdrops and restoring scrolling.',                                  targetScope: 'All Webpages',            icon: Hammer,        statUnit: 'modals neutralized'       },
-  { key: 'fakeDownloadGuardEnabled', statKey: 'fakeDownloadsDefused', category: 'security', categoryLabel: 'Security & Privacy', name: 'Deceptive Download Guard',      description: 'Visibly flags and quarantines deceptive download advertising banners impersonating files.',                                 targetScope: 'File Portals & Mirrors',  icon: AlertTriangle, statUnit: 'trap banners defused'     },
   { key: 'formSalvagerEnabled',      statKey: 'formsBackedUp',        category: 'security', categoryLabel: 'Security & Privacy', name: 'Form Salvager & Crash Guard', description: 'Continuously checkpoints in-progress text inputs into sandboxed storage to safeguard against tab crashes.',                targetScope: 'Forms & Textareas',       icon: FileText,      statUnit: 'forms autosaved'          },
 ];
 
@@ -152,6 +152,9 @@ export function Dashboard() {
     }
     load();
     onSettingsChange(setSettings);
+    onStatsChange((newStats) => {
+      startTransition(() => { setStats(newStats); });
+    });
   }, []);
 
   /* ── PAGE ENTRANCE ANIMATION ──────────────────────────

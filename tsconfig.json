@@ -15,5 +15,5 @@
       "@/*": ["./*"]
     }
   },
-  "include": ["popup", "options", "components", "lib", "features", "background", "utils", "types.d.ts"]
+  "include": ["popup", "options", "components", "lib", "features", "background", "utils", "content", "types.d.ts"]
 }

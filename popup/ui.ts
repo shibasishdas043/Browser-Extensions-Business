@@ -1,7 +1,7 @@
 import gsap from 'gsap';
 import { openFullSettings, loadSessionStats } from './logic';
-import { getSettings, updateSetting } from '../utils/storage';
-import { ProtectionStats } from '../types';
+import { getSettings, updateSetting, onSettingsChange, onStatsChange, DEFAULT_SETTINGS } from '../utils/storage';
+import { ProtectionStats, ZenWebSettings } from '../types';
 
 /* r=67: circumference = 2π×67 ≈ 420.97 */
 const CIRC = 2 * Math.PI * 67;
@@ -28,12 +28,12 @@ interface StatDef {
 type AnimType = 'flipX' | 'flipY' | 'slam' | 'bounce' | 'spin' | 'glitch' | 'zoom';
 
 const STATS: StatDef[] = [
+  { id:'download',  label:'Fake Downloads Defused',   icon:'🛑', color:'#f97316', glow:'rgba(249,115,22,0.09)',   anim:'glitch'  },
   { id:'seo',       label:'SEO Spam Filtered',      icon:'🔍', color:'#10b981', glow:'rgba(16,185,129,0.09)',   anim:'bounce'  },
   { id:'pinterest', label:'Pinterest Walls Hidden',  icon:'📌', color:'#f43f5e', glow:'rgba(244,63,94,0.09)',    anim:'flipY'   },
   { id:'video',     label:'Videos Killed',           icon:'🎬', color:'#ef4444', glow:'rgba(239,68,68,0.09)',    anim:'slam'    },
   { id:'recipe',    label:'Recipe Jumps',            icon:'🍳', color:'#f59e0b', glow:'rgba(245,158,11,0.08)',   anim:'spin'    },
   { id:'overlay',   label:'Overlays Smashed',        icon:'🛡️', color:'#a855f7', glow:'rgba(168,85,247,0.09)',   anim:'flipX'   },
-  { id:'download',  label:'Fakes Defused',           icon:'🛑', color:'#f97316', glow:'rgba(249,115,22,0.09)',   anim:'glitch'  },
   { id:'form',      label:'Forms Salvaged',          icon:'✍️', color:'#06b6d4', glow:'rgba(6,182,212,0.09)',    anim:'zoom'    },
 ];
 
@@ -72,7 +72,8 @@ class ZenWebPopupUI {
   private isOn         = true;
   private heroMode: 'count' | 'status' = 'count';
   private totalBlocked = 74;
-  private statVals     = [14, 28, 5, 3, 8, 12, 4];
+  private statVals     = [12, 14, 28, 5, 3, 8, 4];
+  private currentSettings: ZenWebSettings = DEFAULT_SETTINGS;
 
   constructor() {
     document.readyState === 'loading'
@@ -86,9 +87,23 @@ class ZenWebPopupUI {
     await this.loadStats();
 
     // Load persisted settings
-    const settings = await getSettings();
-    this.isOn = settings.masterEnabled;
+    this.currentSettings = await getSettings();
+    this.isOn = this.currentSettings.masterEnabled;
     this.applyProtectionState(this.isOn, false);
+
+    // Subscribe to real-time 2-way storage synchronization
+    onSettingsChange((newSettings) => {
+      this.currentSettings = newSettings;
+      if (this.isOn !== newSettings.masterEnabled) {
+        this.applyProtectionState(newSettings.masterEnabled, true);
+      } else {
+        this.applyProtectionState(this.isOn, false);
+      }
+    });
+
+    onStatsChange((newStats) => {
+      this.applyStats(newStats);
+    });
 
     if (this.isOn) {
       this.renderSpot(0, 'first');
@@ -180,23 +195,33 @@ class ZenWebPopupUI {
 
 
 
+  private applyStats(s: ProtectionStats) {
+    this.statVals = [
+      s.fakeDownloadsDefused, s.seoSpamFiltered, s.pinterestHidden, s.videosSuppressed,
+      s.recipesSkipped, s.overlaysSmashed, s.formsBackedUp,
+    ];
+
+    const total = this.statVals.reduce((a, b) => a + b, 0);
+    this.totalBlocked = total;
+    if (this.heroMode === 'count') {
+      this.countUp(this.totalEl, total);
+    }
+    this.animateRing(total / Math.max(total * 1.3, 60));
+
+    const mins = (s.totalTimeSavedSeconds / 60).toFixed(1);
+    if (this.timeSavedEl) {
+      this.timeSavedEl.textContent = `~${mins}m saved`;
+    }
+
+    // Update the currently visible card's counter
+    const currentVal = this.statVals[this.spotIdx] ?? 0;
+    this.countUp(this.countEl, currentVal);
+  }
+
   private async loadStats() {
     try {
       const s: ProtectionStats = await loadSessionStats();
-      this.statVals = [
-        s.seoSpamFiltered, s.pinterestHidden, s.videosSuppressed,
-        s.recipesSkipped, s.overlaysSmashed, s.fakeDownloadsDefused, s.formsBackedUp,
-      ];
-
-      const total = this.statVals.reduce((a, b) => a + b, 0);
-      this.totalBlocked = total;
-      this.countUp(this.totalEl, total);
-      setTimeout(() => this.animateRing(total / Math.max(total * 1.3, 60)), 100);
-
-      const mins = (s.totalTimeSavedSeconds / 60).toFixed(1);
-      if (this.timeSavedEl) {
-        this.timeSavedEl.textContent = `~${mins}m saved`;
-      }
+      this.applyStats(s);
     } catch (e) {
       console.error('[ZenWeb]', e);
     }
@@ -368,6 +393,18 @@ class ZenWebPopupUI {
     this.animateHeroFlip();
   }
 
+  private getActiveShieldsCount(): number {
+    return [
+      this.currentSettings.fakeDownloadGuardEnabled,
+      this.currentSettings.humanSearchEnabled,
+      this.currentSettings.pinterestBlockerEnabled,
+      this.currentSettings.floatingVideoKillerEnabled,
+      this.currentSettings.recipeSkipperEnabled,
+      this.currentSettings.autoOverlaySmasherEnabled,
+      this.currentSettings.formSalvagerEnabled,
+    ].filter(Boolean).length;
+  }
+
   private animateHeroFlip() {
     if (!this.heroCenterEl) return;
 
@@ -379,6 +416,7 @@ class ZenWebPopupUI {
       duration: 0.22,
       ease: 'power2.in',
       onComplete: () => {
+        const activeCount = this.getActiveShieldsCount();
         if (this.heroMode === 'count') {
           this.totalEl.classList.remove('zw--text-mode');
           this.heroLabelEl.classList.remove('zw--sub-mode');
@@ -389,7 +427,7 @@ class ZenWebPopupUI {
           this.totalEl.classList.add('zw--text-mode');
           this.heroLabelEl.classList.add('zw--sub-mode');
           this.totalEl.textContent = this.isOn ? 'ACTIVE' : 'PAUSED';
-          this.heroLabelEl.textContent = this.isOn ? '7 SHIELDS ACTIVE' : 'PROTECTION OFF';
+          this.heroLabelEl.textContent = this.isOn ? `${activeCount} SHIELD${activeCount === 1 ? '' : 'S'} ACTIVE` : 'PROTECTION OFF';
           this.heroLabelEl.style.color = '';
         }
 
@@ -431,7 +469,10 @@ class ZenWebPopupUI {
     if (this.toggleBtn) this.toggleBtn.checked = enabled;
     this.toggleTitle.textContent = enabled ? 'All Protections ON' : 'All Protections OFF';
     this.toggleTitle.classList.toggle('zw--off', !enabled);
-    this.toggleSub.textContent = enabled ? '7 shields active' : 'Protection paused';
+
+    const activeCount = this.getActiveShieldsCount();
+    const shieldsWord = `${activeCount} shield${activeCount === 1 ? '' : 's'} active`;
+    this.toggleSub.textContent = enabled ? shieldsWord : 'Protection paused';
 
     if (enabled) {
       this.heroEl.classList.remove('zw--disabled');
@@ -441,7 +482,7 @@ class ZenWebPopupUI {
         this.totalEl.classList.add('zw--text-mode');
         this.heroLabelEl.classList.add('zw--sub-mode');
         this.totalEl.textContent = 'ACTIVE';
-        this.heroLabelEl.textContent = '7 SHIELDS ACTIVE';
+        this.heroLabelEl.textContent = `${activeCount} SHIELD${activeCount === 1 ? '' : 'S'} ACTIVE`;
       } else {
         this.totalEl.classList.remove('zw--text-mode');
         this.heroLabelEl.classList.remove('zw--sub-mode');
