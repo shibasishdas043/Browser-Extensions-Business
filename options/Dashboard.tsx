@@ -7,7 +7,7 @@ import {
   Clock, Search, PinOff, VideoOff, ChefHat,
   Hammer, AlertTriangle, FileText, Lock,
   Sparkles, Check, RotateCcw, Sun, Moon,
-  Heart, Coffee, ExternalLink,
+  Heart, Coffee, ExternalLink, Archive, Copy, Trash2, X, CheckCircle2,
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -15,6 +15,7 @@ import {
   DEFAULT_SETTINGS, getStats, resetStats, onSettingsChange, onStatsChange,
 } from '@/utils/storage';
 import { ZenWebSettings, ProtectionStats, SettingKey } from '@/types';
+import { getAllSavedDrafts, deleteSavedDraft, StoredDraft } from '@/features/form-salvager/logic';
 
 gsap.registerPlugin(ScrollTrigger, ScrollToPlugin);
 
@@ -33,12 +34,12 @@ interface ProtectionItem {
 
 const PROTECTIONS: ProtectionItem[] = [
   { key: 'fakeDownloadGuardEnabled', statKey: 'fakeDownloadsDefused', category: 'security', categoryLabel: 'Security & Privacy', name: 'Deceptive Download Guard',      description: 'Visibly flags and quarantines deceptive download advertising banners impersonating files.',                                 targetScope: 'File Portals & Mirrors',  icon: AlertTriangle, statUnit: 'trap banners defused'     },
+  { key: 'formSalvagerEnabled',      statKey: 'formsBackedUp',        category: 'security', categoryLabel: 'Security & Privacy', name: 'Form Salvager & Crash Guard', description: 'Continuously checkpoints in-progress text inputs into sandboxed storage to safeguard against tab crashes.',                targetScope: 'Forms & Textareas',       icon: FileText,      statUnit: 'forms autosaved'          },
   { key: 'humanSearchEnabled',       statKey: 'seoSpamFiltered',      category: 'search',   categoryLabel: 'Search & Discovery', name: 'Human Search Bypass',           description: 'Injects community discussions and forum filters into search engines to bypass bloated AI content mills.',                    targetScope: 'Google & Search Engines', icon: Search,        statUnit: 'spam results bypassed'    },
   { key: 'pinterestBlockerEnabled',  statKey: 'pinterestHidden',      category: 'search',   categoryLabel: 'Search & Discovery', name: 'Pinterest Wall Demolisher',     description: 'Silently conceals Pinterest boards and forced-signup preview walls from image search results.',                             targetScope: 'Image & Web Search',      icon: PinOff,        statUnit: 'walled pins hidden'       },
   { key: 'floatingVideoKillerEnabled',statKey: 'videosSuppressed',    category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Sticky Video Suppressor',       description: 'Neutralizes picture-in-picture commercial players that float and follow your viewport scroll.',                            targetScope: 'News & Media Outlets',    icon: VideoOff,      statUnit: 'floating players silenced'},
   { key: 'recipeSkipperEnabled',     statKey: 'recipesSkipped',       category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Recipe Story Fluff Skipper',   description: 'Parses recipe JSON-LD schema to auto-surface ingredients and instructions instantly without life stories.',                  targetScope: 'Food & Cooking Sites',    icon: ChefHat,       statUnit: 'stories skipped'          },
   { key: 'autoOverlaySmasherEnabled',statKey: 'overlaysSmashed',      category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Modal & Paywall Smasher',      description: 'Detects screen-darkening newsletter modals, smashing backdrops and restoring scrolling.',                                  targetScope: 'All Webpages',            icon: Hammer,        statUnit: 'modals neutralized'       },
-  { key: 'formSalvagerEnabled',      statKey: 'formsBackedUp',        category: 'security', categoryLabel: 'Security & Privacy', name: 'Form Salvager & Crash Guard', description: 'Continuously checkpoints in-progress text inputs into sandboxed storage to safeguard against tab crashes.',                targetScope: 'Forms & Textareas',       icon: FileText,      statUnit: 'forms autosaved'          },
 ];
 
 const CATEGORY_TABS = [
@@ -119,7 +120,29 @@ export function Dashboard() {
   const [darkMode, setDarkMode]         = useState(false);
   const [toastMsg, setToastMsg]         = useState<string|null>(null);
   const [donationTier, setDonationTier] = useState<number>(5);
+  const [vaultOpen, setVaultOpen]       = useState(false);
+  const [vaultDrafts, setVaultDrafts]   = useState<StoredDraft[]>([]);
+  const [copiedKey, setCopiedKey]       = useState<string | null>(null);
   const [, startTransition]             = useTransition();
+
+  const handleOpenVault = async () => {
+    const drafts = await getAllSavedDrafts();
+    setVaultDrafts(drafts);
+    setVaultOpen(true);
+  };
+
+  const handleCopyDraft = (key: string, text: string) => {
+    navigator.clipboard.writeText(text);
+    setCopiedKey(key);
+    setTimeout(() => setCopiedKey(null), 2000);
+    showToast('Copied draft to clipboard');
+  };
+
+  const handleDeleteDraft = async (key: string) => {
+    await deleteSavedDraft(key);
+    setVaultDrafts((prev) => prev.filter((d) => d.fieldKey !== key));
+    showToast('Draft removed from storage');
+  };
 
   /* refs for GSAP */
   const rootRef          = useRef<HTMLDivElement>(null);
@@ -577,6 +600,25 @@ export function Dashboard() {
                     <p style={{ fontSize: 14, color: cv('--zw-text-secondary'), lineHeight: 1.43, margin: 0 }}>
                       {item.description}
                     </p>
+
+                    {item.key === 'formSalvagerEnabled' && (
+                      <button
+                        type="button"
+                        onClick={handleOpenVault}
+                        className="apple-press inline-flex items-center gap-1.5 self-start rounded-full px-3 py-1 mt-1"
+                        style={{
+                          fontSize: 12,
+                          fontWeight: 500,
+                          color: '#0891b2',
+                          backgroundColor: 'rgba(6, 182, 212, 0.12)',
+                          border: '1px solid rgba(6, 182, 212, 0.25)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <Archive style={{ width: 12, height: 12 }} />
+                        Saved Drafts Vault
+                      </button>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-between pt-4" style={{ borderTop: `1px solid ${cv('--zw-border-divider')}` }}>
@@ -787,6 +829,121 @@ export function Dashboard() {
           </div>
         </footer>
       </main>
+
+      {/* ── Saved Drafts Vault Modal ────────────────────── */}
+      {vaultOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+          <div
+            className="apple-card flex flex-col w-full max-h-[85vh] rounded-[20px] p-6 shadow-2xl"
+            style={{ maxWidth: 640, backgroundColor: cv('--zw-bg-card'), border: `1px solid ${cv('--zw-border-card')}` }}
+          >
+            <div className="flex items-center justify-between pb-4" style={{ borderBottom: `1px solid ${cv('--zw-border-divider')}` }}>
+              <div className="flex items-center gap-2.5">
+                <div className="flex items-center justify-center rounded-[10px] p-2 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400">
+                  <Archive style={{ width: 18, height: 18 }} />
+                </div>
+                <div>
+                  <h2 className="text-base font-semibold" style={{ color: cv('--zw-text-primary'), margin: 0 }}>
+                    Saved Drafts Vault
+                  </h2>
+                  <p className="text-xs" style={{ color: cv('--zw-text-secondary'), margin: 0 }}>
+                    Recover unsubmitted text checkpoints across all websites
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setVaultOpen(false)}
+                className="apple-press rounded-full p-1.5 hover:bg-black/5 dark:hover:bg-white/10"
+                style={{ color: cv('--zw-text-tertiary') }}
+                aria-label="Close vault"
+              >
+                <X style={{ width: 18, height: 18 }} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto py-4 flex flex-col gap-3">
+              {vaultDrafts.length === 0 ? (
+                <div className="py-12 text-center text-sm" style={{ color: cv('--zw-text-tertiary') }}>
+                  No saved drafts currently in storage.<br />
+                  <span className="text-xs">When you type on any site, ZenWeb checkpoints your text safely here.</span>
+                </div>
+              ) : (
+                vaultDrafts.map((d) => (
+                  <div
+                    key={d.fieldKey}
+                    className="p-4 rounded-[14px] flex flex-col gap-2.5 border"
+                    style={{
+                      backgroundColor: cv('--zw-bg-scope'),
+                      borderColor: cv('--zw-border-scope'),
+                    }}
+                  >
+                    <div className="flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2 font-medium truncate max-w-[340px]" style={{ color: cv('--zw-text-primary') }}>
+                        <span className="text-cyan-600 dark:text-cyan-400 font-semibold">{d.fieldLabel || 'Input Field'}</span>
+                        <span style={{ color: cv('--zw-text-tertiary') }}>•</span>
+                        <span className="truncate" style={{ color: cv('--zw-text-secondary') }}>
+                          {d.url.replace(/^https?:\/\//, '')}
+                        </span>
+                      </div>
+                      <span className="text-[11px]" style={{ color: cv('--zw-text-tertiary') }}>
+                        {d.wordCount} words
+                      </span>
+                    </div>
+
+                    <div
+                      className="p-2.5 rounded-[8px] text-xs font-mono max-h-24 overflow-y-auto"
+                      style={{
+                        backgroundColor: cv('--zw-bg-card'),
+                        color: cv('--zw-text-secondary'),
+                        border: `1px solid ${cv('--zw-border-card')}`,
+                      }}
+                    >
+                      {d.value}
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[11px]" style={{ color: cv('--zw-text-tertiary') }}>
+                        Saved {new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {d.revisions && d.revisions.length > 0 && ` · ${d.revisions.length + 1} revisions`}
+                      </span>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleCopyDraft(d.fieldKey, d.value)}
+                          className="apple-press inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full text-cyan-600 bg-cyan-500/10 hover:bg-cyan-500/20"
+                        >
+                          <Copy style={{ width: 12, height: 12 }} />
+                          {copiedKey === d.fieldKey ? 'Copied!' : 'Copy Text'}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteDraft(d.fieldKey)}
+                          className="apple-press text-xs p-1 rounded-full hover:bg-red-500/10 text-red-500"
+                          title="Delete this draft"
+                        >
+                          <Trash2 style={{ width: 14, height: 14 }} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="pt-3 border-t flex justify-end" style={{ borderColor: cv('--zw-border-divider') }}>
+              <button
+                type="button"
+                onClick={() => setVaultOpen(false)}
+                className="apple-press text-xs font-medium px-4 py-2 rounded-full"
+                style={{ backgroundColor: cv('--zw-bg-chip'), color: cv('--zw-text-primary') }}
+              >
+                Close Vault
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Toast ─────────────────────────────────────── */}
       {/* BUG FIX: border was hardcoded rgba(255,255,255,0.08) —

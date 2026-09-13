@@ -42,7 +42,8 @@ export function onSettingsChange(callback: (newSettings: ZenWebSettings) => void
   if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
     chrome.storage.onChanged.addListener((changes, areaName) => {
       if (areaName === 'local' && changes[SETTINGS_KEY]) {
-        callback({ ...DEFAULT_SETTINGS, ...changes[SETTINGS_KEY].newValue });
+        const val = changes[SETTINGS_KEY].newValue as ZenWebSettings;
+        callback({ ...DEFAULT_SETTINGS, ...val });
       }
     });
   }
@@ -65,7 +66,8 @@ export function onStatsChange(callback: (newStats: ProtectionStats) => void): vo
   if (typeof chrome !== 'undefined' && chrome.storage?.onChanged) {
     chrome.storage.onChanged.addListener((changes, areaName) => {
       if (areaName === 'local' && changes[STATS_KEY]) {
-        callback({ ...DEFAULT_STATS, ...changes[STATS_KEY].newValue });
+        const val = changes[STATS_KEY].newValue as ProtectionStats;
+        callback({ ...DEFAULT_STATS, ...val });
       }
     });
   }

@@ -29,12 +29,12 @@ type AnimType = 'flipX' | 'flipY' | 'slam' | 'bounce' | 'spin' | 'glitch' | 'zoo
 
 const STATS: StatDef[] = [
   { id:'download',  label:'Fake Downloads Defused',   icon:'🛑', color:'#f97316', glow:'rgba(249,115,22,0.09)',   anim:'glitch'  },
+  { id:'form',      label:'Forms Salvaged',          icon:'✍️', color:'#06b6d4', glow:'rgba(6,182,212,0.09)',    anim:'zoom'    },
   { id:'seo',       label:'SEO Spam Filtered',      icon:'🔍', color:'#10b981', glow:'rgba(16,185,129,0.09)',   anim:'bounce'  },
   { id:'pinterest', label:'Pinterest Walls Hidden',  icon:'📌', color:'#f43f5e', glow:'rgba(244,63,94,0.09)',    anim:'flipY'   },
   { id:'video',     label:'Videos Killed',           icon:'🎬', color:'#ef4444', glow:'rgba(239,68,68,0.09)',    anim:'slam'    },
   { id:'recipe',    label:'Recipe Jumps',            icon:'🍳', color:'#f59e0b', glow:'rgba(245,158,11,0.08)',   anim:'spin'    },
   { id:'overlay',   label:'Overlays Smashed',        icon:'🛡️', color:'#a855f7', glow:'rgba(168,85,247,0.09)',   anim:'flipX'   },
-  { id:'form',      label:'Forms Salvaged',          icon:'✍️', color:'#06b6d4', glow:'rgba(6,182,212,0.09)',    anim:'zoom'    },
 ];
 
 const INTERVAL_MS = 2600;
@@ -72,7 +72,7 @@ class ZenWebPopupUI {
   private isOn         = true;
   private heroMode: 'count' | 'status' = 'count';
   private totalBlocked = 74;
-  private statVals     = [12, 14, 28, 5, 3, 8, 4];
+  private statVals     = [12, 4, 14, 28, 5, 3, 8];
   private currentSettings: ZenWebSettings = DEFAULT_SETTINGS;
 
   constructor() {
@@ -197,8 +197,8 @@ class ZenWebPopupUI {
 
   private applyStats(s: ProtectionStats) {
     this.statVals = [
-      s.fakeDownloadsDefused, s.seoSpamFiltered, s.pinterestHidden, s.videosSuppressed,
-      s.recipesSkipped, s.overlaysSmashed, s.formsBackedUp,
+      s.fakeDownloadsDefused, s.formsBackedUp, s.seoSpamFiltered, s.pinterestHidden,
+      s.videosSuppressed, s.recipesSkipped, s.overlaysSmashed,
     ];
 
     const total = this.statVals.reduce((a, b) => a + b, 0);
