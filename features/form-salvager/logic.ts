@@ -12,6 +12,8 @@ import {
   removeAllRestorePills,
   showFormLevelBanner,
   dismissFormLevelBanner,
+  showSiteRestorePrompt,
+  dismissSiteRestorePrompt,
   flashRestoredGlow,
   DraftMeta,
 } from './ui';
@@ -25,6 +27,8 @@ export interface DraftRevision {
 
 export interface StoredDraft {
   url: string;
+  siteUrl?: string;
+  pageTitle?: string;
   fieldKey: string;
   fieldLabel: string;
   value: string;
@@ -221,8 +225,12 @@ export class FormSalvager {
         revisions = revisions.slice(revisions.length - 3);
       }
 
+      const { fullUrl, siteUrl, pageTitle } = this.getCurrentUrls();
+
       const draft: StoredDraft = {
-        url: window.location.origin + window.location.pathname,
+        url: fullUrl,
+        siteUrl,
+        pageTitle,
         fieldKey: key,
         fieldLabel: label,
         value: val,
@@ -241,14 +249,16 @@ export class FormSalvager {
 
   /**
    * Checks the document for empty fields that have saved recoverable drafts in storage.
-   * Coordinates form-level "Restore All" banners when 2+ fields in a form have drafts.
+   * Coordinates form-level "Restore All" banners and floating site-level reload prompts.
    */
   public async checkForRecoverableDrafts(): Promise<void> {
     const candidates = document.querySelectorAll<HTMLElement>(
       'textarea, input, [contenteditable="true"], [role="textbox"]'
     );
 
-    const formRecoverableMap = new Map<HTMLFormElement, Array<{ el: HTMLElement; draft: StoredDraft }>>();
+    const formRecoverableMap = new Map<HTMLFormElement, Array<{ el: HTMLElement; draft: StoredDraft; key: string }>>();
+    const standaloneRecoverable: Array<{ el: HTMLElement; draft: StoredDraft; key: string }> = [];
+    const allRecoverable: Array<{ el: HTMLElement; draft: StoredDraft; key: string }> = [];
 
     for (const el of Array.from(candidates)) {
       if (!this.isSalvagableField(el)) continue;
@@ -260,48 +270,27 @@ export class FormSalvager {
       const draft = await this.getStoredDraft(key);
 
       if (draft && draft.value.trim().length >= 5) {
-        // Snippet preview (up to 75 characters)
-        const cleanSnippet = draft.value.replace(/\s+/g, ' ').trim();
-        const snippet = cleanSnippet.length > 75 ? `${cleanSnippet.slice(0, 72)}...` : cleanSnippet;
+        const item = { el, draft, key };
+        allRecoverable.push(item);
 
-        const meta: DraftMeta = {
-          wordCount: draft.wordCount,
-          timeAgo: this.formatTimeAgo(draft.timestamp),
-          snippet,
-          revisionsCount: (draft.revisions?.length || 0) + 1,
-        };
-
-        showRestorePill(
-          el,
-          meta,
-          () => {
-            this.setElementValue(el, draft.value, draft.isContentEditable);
-            flashRestoredGlow(el);
-            recordProtectionEvent('formsBackedUp', 1).catch(() => {});
-          },
-          () => {
-            this.removeStoredDraft(key);
-          }
-        );
-
-        // Group by form for consolidated banner
         const form = el.closest('form');
         if (form) {
           const list = formRecoverableMap.get(form) || [];
-          list.push({ el, draft });
+          list.push(item);
           formRecoverableMap.set(form, list);
+        } else {
+          standaloneRecoverable.push(item);
         }
       }
     }
 
-    // Form-Level "Restore All" Banner
+    // 1. Form-Level Coordinated Restore Banner (Prevents overlapping badges in multi-field forms)
     for (const [form, items] of formRecoverableMap.entries()) {
       if (items.length >= 2) {
         showFormLevelBanner(
           form,
           items.length,
           () => {
-            // Restore all fields in this form
             items.forEach(({ el, draft }) => {
               this.setElementValue(el, draft.value, draft.isContentEditable);
               flashRestoredGlow(el);
@@ -310,15 +299,86 @@ export class FormSalvager {
             recordProtectionEvent('formsBackedUp', items.length).catch(() => {});
           },
           () => {
-            // Dismiss all
             items.forEach(({ el, draft }) => {
               this.removeStoredDraft(draft.fieldKey);
               dismissRestorePill(el);
             });
           }
         );
+      } else if (items.length === 1) {
+        this.renderFieldPill(items[0].el, items[0].draft, items[0].key);
       }
     }
+
+    // 2. Standalone fields outside forms get discreet nested pills
+    for (const { el, draft, key } of standaloneRecoverable) {
+      this.renderFieldPill(el, draft, key);
+    }
+
+    // 3. Site-Level Floating Restore Prompt in the corner
+    if (allRecoverable.length > 0) {
+      const { siteUrl } = this.getCurrentUrls();
+      const totalWords = allRecoverable.reduce((sum, item) => sum + (item.draft.wordCount || 0), 0);
+      const latestTimestamp = Math.max(...allRecoverable.map((item) => item.draft.timestamp || 0));
+      const longestItem = [...allRecoverable].sort(
+        (a, b) => (b.draft.value?.length || 0) - (a.draft.value?.length || 0)
+      )[0];
+      const longestSnippet = longestItem?.draft?.value
+        ? longestItem.draft.value.replace(/\s+/g, ' ').trim().slice(0, 75) +
+          (longestItem.draft.value.length > 75 ? '...' : '')
+        : undefined;
+
+      showSiteRestorePrompt({
+        fieldCount: allRecoverable.length,
+        wordCount: totalWords,
+        timeAgo: this.formatTimeAgo(latestTimestamp),
+        snippet: longestSnippet,
+        siteUrl,
+        onReload: () => {
+          allRecoverable.forEach(({ el, draft }) => {
+            this.setElementValue(el, draft.value, draft.isContentEditable);
+            flashRestoredGlow(el);
+            dismissRestorePill(el);
+          });
+          recordProtectionEvent('formsBackedUp', allRecoverable.length).catch(() => {});
+        },
+        onDiscard: () => {
+          allRecoverable.forEach(({ el, draft }) => {
+            this.removeStoredDraft(draft.fieldKey);
+            dismissRestorePill(el);
+          });
+          dismissFormLevelBanner(document.querySelector('form') as HTMLFormElement);
+        },
+      });
+    }
+  }
+
+  /**
+   * Renders a discreet restore pill nested inside a specific field.
+   */
+  private renderFieldPill(el: HTMLElement, draft: StoredDraft, key: string): void {
+    const cleanSnippet = draft.value.replace(/\s+/g, ' ').trim();
+    const snippet = cleanSnippet.length > 75 ? `${cleanSnippet.slice(0, 72)}...` : cleanSnippet;
+
+    const meta: DraftMeta = {
+      wordCount: draft.wordCount,
+      timeAgo: this.formatTimeAgo(draft.timestamp),
+      snippet,
+      revisionsCount: (draft.revisions?.length || 0) + 1,
+    };
+
+    showRestorePill(
+      el,
+      meta,
+      () => {
+        this.setElementValue(el, draft.value, draft.isContentEditable);
+        flashRestoredGlow(el);
+        recordProtectionEvent('formsBackedUp', 1).catch(() => {});
+      },
+      () => {
+        this.removeStoredDraft(key);
+      }
+    );
   }
 
   /**
@@ -337,14 +397,40 @@ export class FormSalvager {
         dismissRestorePill(field);
       }
     }
+
+    // Dismiss floating prompt if no unsubmitted drafts remain
+    dismissSiteRestorePrompt();
+  }
+
+  /**
+   * Safely extracts current URL metrics including full page URL, site origin, and document title.
+   */
+  public getCurrentUrls(): { fullUrl: string; siteUrl: string; pageTitle: string } {
+    const fullUrl = window.location.href.split('#')[0];
+    let siteUrl = '';
+    try {
+      if (window.location.origin && window.location.origin !== 'null') {
+        siteUrl = window.location.origin;
+      } else if (window.location.protocol === 'file:') {
+        siteUrl = 'file://';
+      } else {
+        siteUrl = window.location.host || fullUrl;
+      }
+    } catch {
+      siteUrl = fullUrl;
+    }
+    return {
+      fullUrl,
+      siteUrl,
+      pageTitle: document.title || '',
+    };
   }
 
   /**
    * Generates a deterministic, collision-free storage key for a given input element.
    */
   public getElementStorageKey(el: HTMLElement): string {
-    const origin = window.location.origin;
-    const path = window.location.pathname;
+    const { fullUrl } = this.getCurrentUrls();
 
     const form = el.closest('form');
     let formId = 'no-form';
@@ -364,7 +450,7 @@ export class FormSalvager {
       descriptor = `${tag}[${allSame.indexOf(el)}]`;
     }
 
-    return `${DRAFT_PREFIX}${origin}${path}::form[${formId}]::${descriptor}`;
+    return `${DRAFT_PREFIX}${fullUrl}::form[${formId}]::${descriptor}`;
   }
 
   /**
@@ -425,10 +511,28 @@ export class FormSalvager {
     try {
       if (typeof chrome !== 'undefined' && chrome.storage?.local) {
         const res = await chrome.storage.local.get(key);
-        return res[key] ? (res[key] as StoredDraft) : null;
+        if (res[key]) return res[key] as StoredDraft;
+      } else {
+        const item = localStorage.getItem(key);
+        if (item) return JSON.parse(item) as StoredDraft;
       }
-      const item = localStorage.getItem(key);
-      return item ? (JSON.parse(item) as StoredDraft) : null;
+
+      // Backward-compatible fallback for legacy storage keys
+      const legacyKey = key.replace(
+        window.location.href.split('#')[0],
+        window.location.origin + window.location.pathname
+      );
+      if (legacyKey !== key) {
+        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+          const res = await chrome.storage.local.get(legacyKey);
+          if (res[legacyKey]) return res[legacyKey] as StoredDraft;
+        } else {
+          const item = localStorage.getItem(legacyKey);
+          if (item) return JSON.parse(item) as StoredDraft;
+        }
+      }
+
+      return null;
     } catch {
       return null;
     }

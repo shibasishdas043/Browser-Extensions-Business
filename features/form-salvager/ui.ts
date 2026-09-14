@@ -9,6 +9,7 @@ const STYLE_ID = 'zenweb-form-salvager-styles';
 const PILL_CLASS = 'zw-salvage-pill';
 const POPOVER_CLASS = 'zw-salvage-popover';
 const FORM_BANNER_CLASS = 'zw-salvage-form-banner';
+const SITE_PROMPT_CLASS = 'zw-salvage-site-prompt';
 const SALVAGE_ATTR = 'data-zenweb-salvage-active';
 
 export interface DraftMeta {
@@ -16,6 +17,17 @@ export interface DraftMeta {
   timeAgo: string;
   snippet?: string;
   revisionsCount?: number;
+}
+
+export interface SitePromptOptions {
+  fieldCount: number;
+  wordCount: number;
+  timeAgo: string;
+  snippet?: string;
+  siteUrl?: string;
+  onReload: () => void;
+  onDiscard: () => void;
+  onDismiss?: () => void;
 }
 
 interface ActiveSalvageItem {
@@ -31,6 +43,7 @@ interface ActiveFormBanner {
 
 const activePills: ActiveSalvageItem[] = [];
 const activeFormBanners: ActiveFormBanner[] = [];
+let activeSitePrompt: HTMLElement | null = null;
 let windowListenersAttached = false;
 
 /**
@@ -66,12 +79,12 @@ export function injectFormSalvagerStyles(): void {
 
     @keyframes zwRestoredGlowAnim {
       0% {
-        box-shadow: 0 0 0 4px rgba(6, 182, 212, 0.65) !important;
-        outline: 2px solid #06b6d4 !important;
+        box-shadow: 0 0 0 3px rgba(0, 102, 204, 0.5) !important;
+        outline: 2px solid #0066cc !important;
       }
       60% {
-        box-shadow: 0 0 0 6px rgba(6, 182, 212, 0.25) !important;
-        outline: 2px solid #06b6d4 !important;
+        box-shadow: 0 0 0 5px rgba(0, 102, 204, 0.18) !important;
+        outline: 2px solid #0071e3 !important;
       }
       100% {
         box-shadow: none !important;
@@ -80,51 +93,53 @@ export function injectFormSalvagerStyles(): void {
     }
 
     .zw-restored-glow {
-      animation: zwRestoredGlowAnim 1.25s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+      animation: zwRestoredGlowAnim 1.1s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
     }
 
+    /* ── Apple-Grade Discreet Restore Pill (Nested inside field) ── */
     .${PILL_CLASS} {
       all: initial;
       display: inline-flex !important;
       align-items: center !important;
-      gap: 6px !important;
-      padding: 5px 8px 5px 11px !important;
-      background: rgba(29, 29, 31, 0.94) !important;
+      gap: 5px !important;
+      padding: 2px 4px 2px 8px !important;
+      height: 24px !important;
+      background: rgba(29, 29, 31, 0.90) !important;
       backdrop-filter: saturate(180%) blur(20px) !important;
       -webkit-backdrop-filter: saturate(180%) blur(20px) !important;
       color: #ffffff !important;
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif !important;
-      font-size: 12px !important;
+      font-size: 11px !important;
       font-weight: 400 !important;
       line-height: 1 !important;
       letter-spacing: -0.015em !important;
       border-radius: 9999px !important;
-      border: 1px solid rgba(255, 255, 255, 0.18) !important;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.32), 0 2px 6px rgba(0, 0, 0, 0.16) !important;
+      border: 1px solid rgba(255, 255, 255, 0.14) !important;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.24) !important;
       z-index: 2147483640 !important;
       position: absolute !important;
       box-sizing: border-box !important;
       user-select: none !important;
       pointer-events: auto !important;
-      animation: zwSalvagePillEnter 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+      animation: zwSalvagePillEnter 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
       white-space: nowrap !important;
-      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease !important;
+      transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease !important;
       cursor: default !important;
     }
 
     .${PILL_CLASS}:hover {
-      background: rgba(29, 29, 31, 0.98) !important;
-      border-color: rgba(6, 182, 212, 0.45) !important;
-      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.42), 0 2px 8px rgba(6, 182, 212, 0.2) !important;
+      background: rgba(29, 29, 31, 0.96) !important;
+      border-color: rgba(41, 151, 255, 0.4) !important;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.32) !important;
     }
 
     .${PILL_CLASS} .zw-salvage-brand {
       all: initial;
       display: inline-flex !important;
       align-items: center !important;
-      gap: 5px !important;
+      gap: 4px !important;
       font-family: inherit !important;
-      font-size: 12px !important;
+      font-size: 11px !important;
       font-weight: 600 !important;
       color: #ffffff !important;
       letter-spacing: -0.02em !important;
@@ -136,23 +151,13 @@ export function injectFormSalvagerStyles(): void {
       flex-shrink: 0 !important;
     }
 
-    .${PILL_CLASS} .zw-salvage-sep {
-      all: initial;
-      display: inline-block !important;
-      width: 3px !important;
-      height: 3px !important;
-      border-radius: 50% !important;
-      background: rgba(255, 255, 255, 0.3) !important;
-      margin: 0 1px !important;
-    }
-
     .${PILL_CLASS} .zw-salvage-sub {
       all: initial;
       display: inline !important;
       font-family: inherit !important;
-      font-size: 12px !important;
+      font-size: 11px !important;
       font-weight: 400 !important;
-      color: #22d3ee !important;
+      color: #a1a1a6 !important;
       letter-spacing: -0.01em !important;
       line-height: 1 !important;
       white-space: nowrap !important;
@@ -163,16 +168,16 @@ export function injectFormSalvagerStyles(): void {
       display: inline-flex !important;
       align-items: center !important;
       justify-content: center !important;
-      background: rgba(255, 255, 255, 0.12) !important;
-      border: 1px solid rgba(255, 255, 255, 0.18) !important;
+      background: rgba(255, 255, 255, 0.08) !important;
+      border: 1px solid rgba(255, 255, 255, 0.14) !important;
       border-radius: 4px !important;
-      color: #94a3b8 !important;
+      color: #d2d2d7 !important;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace !important;
-      font-size: 10px !important;
-      font-weight: 600 !important;
-      padding: 2px 4px !important;
+      font-size: 9px !important;
+      font-weight: 500 !important;
+      padding: 1px 4px !important;
       line-height: 1 !important;
-      margin-left: 2px !important;
+      margin-left: 1px !important;
     }
 
     .${PILL_CLASS} .zw-salvage-btn-restore {
@@ -181,25 +186,22 @@ export function injectFormSalvagerStyles(): void {
       display: inline-flex !important;
       align-items: center !important;
       justify-content: center !important;
-      background: rgba(6, 182, 212, 0.2) !important;
-      color: #22d3ee !important;
-      border: 1px solid rgba(6, 182, 212, 0.42) !important;
+      background: #0066cc !important;
+      color: #ffffff !important;
+      border: none !important;
       border-radius: 9999px !important;
-      padding: 3px 9px !important;
+      padding: 2px 8px !important;
       font-family: inherit !important;
       font-size: 11px !important;
       font-weight: 600 !important;
       letter-spacing: -0.01em !important;
       line-height: 1 !important;
       margin-left: 2px !important;
-      transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, transform 0.1s ease !important;
+      transition: background 0.15s ease, transform 0.1s ease !important;
     }
 
     .${PILL_CLASS} .zw-salvage-btn-restore:hover {
-      background: #06b6d4 !important;
-      color: #ffffff !important;
-      border-color: #06b6d4 !important;
-      box-shadow: 0 0 12px rgba(6, 182, 212, 0.45) !important;
+      background: #0071e3 !important;
     }
 
     .${PILL_CLASS} .zw-salvage-btn-restore:active {
@@ -213,15 +215,15 @@ export function injectFormSalvagerStyles(): void {
       align-items: center !important;
       justify-content: center !important;
       background: transparent !important;
-      color: rgba(255, 255, 255, 0.45) !important;
+      color: rgba(255, 255, 255, 0.4) !important;
       border-radius: 50% !important;
-      width: 18px !important;
-      height: 18px !important;
+      width: 16px !important;
+      height: 16px !important;
       font-family: inherit !important;
-      font-size: 11px !important;
+      font-size: 10px !important;
       font-weight: 500 !important;
       line-height: 1 !important;
-      margin-left: -2px !important;
+      margin-left: -1px !important;
       transition: color 0.15s ease, background 0.15s ease !important;
     }
 
@@ -292,18 +294,21 @@ export function injectFormSalvagerStyles(): void {
       z-index: 2147483638 !important;
       display: inline-flex !important;
       align-items: center !important;
-      gap: 10px !important;
-      padding: 7px 12px !important;
-      background: rgba(29, 29, 31, 0.95) !important;
+      gap: 8px !important;
+      padding: 4px 6px 4px 12px !important;
+      height: 28px !important;
+      background: rgba(29, 29, 31, 0.90) !important;
       backdrop-filter: saturate(180%) blur(20px) !important;
       -webkit-backdrop-filter: saturate(180%) blur(20px) !important;
       color: #ffffff !important;
-      border: 1px solid rgba(6, 182, 212, 0.35) !important;
+      border: 1px solid rgba(255, 255, 255, 0.14) !important;
       border-radius: 9999px !important;
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35) !important;
+      box-shadow: 0 4px 14px rgba(0, 0, 0, 0.24) !important;
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif !important;
       font-size: 12px !important;
-      animation: zwSalvagePillEnter 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+      letter-spacing: -0.015em !important;
+      box-sizing: border-box !important;
+      animation: zwSalvagePillEnter 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
     }
 
     .${FORM_BANNER_CLASS} .zw-banner-btn-restore {
@@ -311,37 +316,230 @@ export function injectFormSalvagerStyles(): void {
       cursor: pointer !important;
       display: inline-flex !important;
       align-items: center !important;
-      background: #06b6d4 !important;
+      background: #0066cc !important;
       color: #ffffff !important;
       border-radius: 9999px !important;
-      padding: 4px 11px !important;
+      padding: 3px 10px !important;
       font-family: inherit !important;
       font-size: 11px !important;
       font-weight: 600 !important;
+      letter-spacing: -0.01em !important;
       transition: background 0.15s ease, transform 0.1s ease !important;
     }
 
     .${FORM_BANNER_CLASS} .zw-banner-btn-restore:hover {
-      background: #0891b2 !important;
-      transform: scale(1.02) !important;
+      background: #0071e3 !important;
+    }
+
+    .${FORM_BANNER_CLASS} .zw-banner-btn-restore:active {
+      transform: scale(0.95) !important;
     }
 
     .${FORM_BANNER_CLASS} .zw-banner-btn-discard {
       all: initial;
       cursor: pointer !important;
-      color: rgba(255, 255, 255, 0.5) !important;
+      color: rgba(255, 255, 255, 0.45) !important;
       font-size: 11px !important;
       padding: 2px 5px !important;
       border-radius: 50% !important;
-      transition: color 0.15s ease !important;
+      transition: color 0.15s ease, background 0.15s ease !important;
     }
 
     .${FORM_BANNER_CLASS} .zw-banner-btn-discard:hover {
+      color: #ffffff !important;
+      background: rgba(255, 255, 255, 0.12) !important;
+    }
+
+    /* ── Floating Site-Level Restore Prompt ── */
+    @keyframes zwSitePromptEnter {
+      from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.96);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+      }
+    }
+
+    .${SITE_PROMPT_CLASS} {
+      all: initial;
+      position: fixed !important;
+      bottom: 24px !important;
+      right: 24px !important;
+      z-index: 2147483647 !important;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 9px !important;
+      width: 300px !important;
+      max-width: calc(100vw - 32px) !important;
+      padding: 13px 15px !important;
+      background: rgba(29, 29, 31, 0.92) !important;
+      backdrop-filter: saturate(180%) blur(24px) !important;
+      -webkit-backdrop-filter: saturate(180%) blur(24px) !important;
+      border: 1px solid rgba(255, 255, 255, 0.14) !important;
+      border-radius: 16px !important;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.38), 0 0 0 1px rgba(255, 255, 255, 0.06) !important;
+      color: #ffffff !important;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif !important;
+      font-size: 12px !important;
+      line-height: 1.4 !important;
+      box-sizing: border-box !important;
+      animation: zwSitePromptEnter 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+      pointer-events: auto !important;
+      user-select: none !important;
+      transition: opacity 0.2s ease, transform 0.2s ease !important;
+    }
+
+    .${SITE_PROMPT_CLASS} .zw-site-prompt-header {
+      all: initial;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      width: 100% !important;
+      font-family: inherit !important;
+    }
+
+    .${SITE_PROMPT_CLASS} .zw-site-prompt-title-wrap {
+      all: initial;
+      display: flex !important;
+      align-items: center !important;
+      gap: 7px !important;
+      font-family: inherit !important;
+    }
+
+    .${SITE_PROMPT_CLASS} .zw-site-prompt-icon-badge {
+      all: initial;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 22px !important;
+      height: 22px !important;
+      border-radius: 6px !important;
+      background: rgba(41, 151, 255, 0.15) !important;
+      border: 1px solid rgba(41, 151, 255, 0.25) !important;
+      flex-shrink: 0 !important;
+    }
+
+    .${SITE_PROMPT_CLASS} .zw-site-prompt-title {
+      all: initial;
+      font-family: inherit !important;
+      font-size: 13px !important;
+      font-weight: 600 !important;
+      color: #ffffff !important;
+      letter-spacing: -0.015em !important;
+      line-height: 1.2 !important;
+    }
+
+    .${SITE_PROMPT_CLASS} .zw-site-prompt-btn-close {
+      all: initial;
+      cursor: pointer !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      width: 18px !important;
+      height: 18px !important;
+      border-radius: 50% !important;
+      color: rgba(255, 255, 255, 0.45) !important;
+      font-family: inherit !important;
+      font-size: 12px !important;
+      line-height: 1 !important;
+      transition: color 0.15s ease, background 0.15s ease !important;
+    }
+
+    .${SITE_PROMPT_CLASS} .zw-site-prompt-btn-close:hover {
+      color: #ffffff !important;
+      background: rgba(255, 255, 255, 0.12) !important;
+    }
+
+    .${SITE_PROMPT_CLASS} .zw-site-prompt-body {
+      all: initial;
+      display: flex !important;
+      flex-direction: column !important;
+      gap: 5px !important;
+      font-family: inherit !important;
+      font-size: 11px !important;
+      color: #a1a1a6 !important;
+      line-height: 1.35 !important;
+    }
+
+    .${SITE_PROMPT_CLASS} .zw-site-prompt-quote {
+      all: initial;
+      display: block !important;
+      font-family: inherit !important;
+      font-size: 11px !important;
+      font-style: italic !important;
+      color: #d2d2d7 !important;
+      background: rgba(255, 255, 255, 0.05) !important;
+      border-left: 2px solid #2997ff !important;
+      padding: 4px 7px !important;
+      border-radius: 0 5px 5px 0 !important;
+      max-height: 44px !important;
+      overflow: hidden !important;
+      text-overflow: ellipsis !important;
+      word-break: break-word !important;
+      box-sizing: border-box !important;
+    }
+
+    .${SITE_PROMPT_CLASS} .zw-site-prompt-actions {
+      all: initial;
+      display: flex !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+      gap: 8px !important;
+      padding-top: 3px !important;
+      border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+      font-family: inherit !important;
+    }
+
+    .${SITE_PROMPT_CLASS} .zw-site-prompt-btn-reload {
+      all: initial;
+      cursor: pointer !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      justify-content: center !important;
+      gap: 4px !important;
+      background: #0066cc !important;
+      color: #ffffff !important;
+      border: none !important;
+      border-radius: 9999px !important;
+      padding: 5px 12px !important;
+      font-family: inherit !important;
+      font-size: 11px !important;
+      font-weight: 600 !important;
+      letter-spacing: -0.01em !important;
+      transition: background 0.15s ease, transform 0.1s ease !important;
+    }
+
+    .${SITE_PROMPT_CLASS} .zw-site-prompt-btn-reload:hover {
+      background: #0071e3 !important;
+    }
+
+    .${SITE_PROMPT_CLASS} .zw-site-prompt-btn-reload:active {
+      transform: scale(0.95) !important;
+    }
+
+    .${SITE_PROMPT_CLASS} .zw-site-prompt-btn-discard {
+      all: initial;
+      cursor: pointer !important;
+      display: inline-flex !important;
+      align-items: center !important;
+      color: rgba(255, 255, 255, 0.45) !important;
+      font-family: inherit !important;
+      font-size: 11px !important;
+      font-weight: 500 !important;
+      padding: 3px 6px !important;
+      border-radius: 6px !important;
+      transition: color 0.15s ease, background 0.15s ease !important;
+    }
+
+    .${SITE_PROMPT_CLASS} .zw-site-prompt-btn-discard:hover {
       color: #ff3b30 !important;
+      background: rgba(255, 59, 48, 0.12) !important;
     }
 
     [${SALVAGE_ATTR}="true"] {
-      box-shadow: 0 0 0 2px rgba(6, 182, 212, 0.4) !important;
+      box-shadow: 0 0 0 2px rgba(0, 102, 204, 0.35) !important;
       transition: box-shadow 0.2s ease !important;
     }
   `;
@@ -355,11 +553,11 @@ export function injectFormSalvagerStyles(): void {
  */
 function createPenIcon(): SVGElement {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('width', '13');
-  svg.setAttribute('height', '13');
+  svg.setAttribute('width', '12');
+  svg.setAttribute('height', '12');
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('fill', 'none');
-  svg.setAttribute('stroke', '#22d3ee');
+  svg.setAttribute('stroke', '#2997ff');
   svg.setAttribute('stroke-width', '2.2');
   svg.setAttribute('stroke-linecap', 'round');
   svg.setAttribute('stroke-linejoin', 'round');
@@ -382,7 +580,7 @@ export function updateRestorePillPositions(): void {
   const scrollX = window.scrollX || window.pageXOffset;
   const scrollY = window.scrollY || window.pageYOffset;
 
-  // 1. Reposition field pills
+  // 1. Reposition field pills: cleanly nested inside the input/textarea right edge
   for (let i = activePills.length - 1; i >= 0; i--) {
     const item = activePills[i];
     const { target, pill, popover } = item;
@@ -397,15 +595,18 @@ export function updateRestorePillPositions(): void {
     const rect = target.getBoundingClientRect();
     if (rect.width === 0 && rect.height === 0) continue;
 
-    const pillWidth = pill.offsetWidth || 210;
-    const pillHeight = pill.offsetHeight || 30;
+    const pillWidth = pill.offsetWidth || 135;
+    const pillHeight = pill.offsetHeight || 24;
 
-    let posX = rect.right + scrollX - pillWidth;
-    if (posX < 8) posX = 8;
+    const posX = rect.right + scrollX - pillWidth - 6;
+    let posY: number;
 
-    let posY = rect.top + scrollY - pillHeight - 6;
-    if (rect.top < pillHeight + 10) {
-      posY = rect.top + scrollY + 6;
+    if (rect.height > 55) {
+      // Textarea or rich-text editor: cleanly nested in top-right corner
+      posY = rect.top + scrollY + 8;
+    } else {
+      // Single-line input: vertically centered cleanly inside the right edge of input
+      posY = rect.top + scrollY + Math.max(2, Math.floor((rect.height - pillHeight) / 2));
     }
 
     pill.style.left = `${posX}px`;
@@ -413,16 +614,16 @@ export function updateRestorePillPositions(): void {
 
     // Reposition popover if present
     if (popover) {
-      const popoverWidth = popover.offsetWidth || 270;
+      const popoverWidth = popover.offsetWidth || 240;
       let popoverX = rect.right + scrollX - popoverWidth;
       if (popoverX < 8) popoverX = 8;
-      const popoverY = posY - (popover.offsetHeight || 80) - 6;
+      const popoverY = posY - (popover.offsetHeight || 70) - 6;
       popover.style.left = `${popoverX}px`;
       popover.style.top = `${popoverY > scrollY ? popoverY : posY + pillHeight + 6}px`;
     }
   }
 
-  // 2. Reposition form-level banners
+  // 2. Reposition form-level banners: docked cleanly at top-right above the form
   for (let i = activeFormBanners.length - 1; i >= 0; i--) {
     const item = activeFormBanners[i];
     const { form, banner } = item;
@@ -434,12 +635,17 @@ export function updateRestorePillPositions(): void {
     }
 
     const rect = form.getBoundingClientRect();
-    const bannerHeight = banner.offsetHeight || 36;
-    const posX = rect.left + scrollX + 12;
-    const posY = rect.top + scrollY - bannerHeight - 8;
+    const bannerHeight = banner.offsetHeight || 28;
+    const bannerWidth = banner.offsetWidth || 165;
+    let posX = rect.right + scrollX - bannerWidth - 12;
+    if (posX < 8) posX = 8;
+    let posY = rect.top + scrollY - bannerHeight - 8;
+    if (posY < scrollY + 4) {
+      posY = rect.top + scrollY + 8;
+    }
 
     banner.style.left = `${posX}px`;
-    banner.style.top = `${posY > scrollY ? posY : rect.top + scrollY + 8}px`;
+    banner.style.top = `${posY}px`;
   }
 }
 
@@ -495,18 +701,17 @@ export function showRestorePill(
   const dot = document.createElement('span');
   dot.className = 'zw-salvage-sep';
 
-  // Subtitle / Preview info
+  // Subtitle / Time info
   const sub = document.createElement('span');
   sub.className = 'zw-salvage-sub';
-  const countLabel = meta.wordCount === 1 ? '1 word' : `${meta.wordCount} words`;
-  const revLabel = meta.revisionsCount && meta.revisionsCount > 1 ? ` (${meta.revisionsCount} revisions)` : '';
-  sub.textContent = `${countLabel} · ${meta.timeAgo}${revLabel}`;
+  sub.textContent = `· ${meta.timeAgo}`;
 
   // Keyboard shortcut badge
   const kbd = document.createElement('span');
   kbd.className = 'zw-salvage-kbd';
-  kbd.textContent = 'Alt+R';
-  kbd.title = 'Press Alt+R while field is focused to restore';
+  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/i.test(navigator.platform);
+  kbd.textContent = isMac ? '⌥R' : 'Alt+R';
+  kbd.title = 'Press shortcut while field is focused to restore';
 
   // Restore button
   const restoreBtn = document.createElement('button');
@@ -557,6 +762,7 @@ export function showRestorePill(
     const popMeta = document.createElement('div');
     popMeta.className = 'zw-popover-meta';
 
+    const countLabel = meta.wordCount === 1 ? '1 word' : `${meta.wordCount} words`;
     const countSpan = document.createElement('span');
     countSpan.textContent = `Total: ${countLabel}`;
 
@@ -609,12 +815,12 @@ export function showFormLevelBanner(
 
   const label = document.createElement('span');
   label.style.fontWeight = '600';
-  label.textContent = `ZenWeb: ${fieldCount} recoverable fields found`;
+  label.textContent = `${fieldCount} drafts saved`;
 
   const restoreAllBtn = document.createElement('button');
   restoreAllBtn.className = 'zw-banner-btn-restore';
   restoreAllBtn.type = 'button';
-  restoreAllBtn.textContent = 'Restore Entire Form';
+  restoreAllBtn.textContent = 'Restore All';
 
   restoreAllBtn.addEventListener('click', (e) => {
     e.preventDefault();
@@ -672,9 +878,132 @@ export function dismissRestorePill(target: HTMLElement): void {
 }
 
 /**
+ * Displays a floating Apple-styled pop-up prompt in the corner offering to reload saved form data.
+ */
+export function showSiteRestorePrompt(options: SitePromptOptions): HTMLElement {
+  injectFormSalvagerStyles();
+  dismissSiteRestorePrompt();
+
+  const prompt = document.createElement('div');
+  prompt.className = SITE_PROMPT_CLASS;
+  prompt.setAttribute('role', 'alertdialog');
+  prompt.setAttribute('aria-label', 'ZenWeb detected unsubmitted form data for this site');
+
+  // Header
+  const header = document.createElement('div');
+  header.className = 'zw-site-prompt-header';
+
+  const titleWrap = document.createElement('div');
+  titleWrap.className = 'zw-site-prompt-title-wrap';
+
+  const iconBadge = document.createElement('div');
+  iconBadge.className = 'zw-site-prompt-icon-badge';
+  iconBadge.appendChild(createPenIcon());
+
+  const title = document.createElement('span');
+  title.className = 'zw-site-prompt-title';
+  title.textContent = 'Unsubmitted Form Draft';
+
+  titleWrap.appendChild(iconBadge);
+  titleWrap.appendChild(title);
+
+  const closeBtn = document.createElement('button');
+  closeBtn.type = 'button';
+  closeBtn.className = 'zw-site-prompt-btn-close';
+  closeBtn.textContent = '✕';
+  closeBtn.title = 'Dismiss prompt';
+  closeBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    options.onDismiss?.();
+    dismissSiteRestorePrompt();
+  });
+
+  header.appendChild(titleWrap);
+  header.appendChild(closeBtn);
+
+  // Body
+  const body = document.createElement('div');
+  body.className = 'zw-site-prompt-body';
+
+  const sub = document.createElement('span');
+  const fieldLabel = options.fieldCount === 1 ? '1 field' : `${options.fieldCount} fields`;
+  sub.textContent = `${fieldLabel} saved · ${options.timeAgo}`;
+  body.appendChild(sub);
+
+  if (options.snippet) {
+    const quote = document.createElement('span');
+    quote.className = 'zw-site-prompt-quote';
+    quote.textContent = `“${options.snippet}”`;
+    body.appendChild(quote);
+  }
+
+  // Actions
+  const actions = document.createElement('div');
+  actions.className = 'zw-site-prompt-actions';
+
+  const reloadBtn = document.createElement('button');
+  reloadBtn.type = 'button';
+  reloadBtn.className = 'zw-site-prompt-btn-reload';
+  reloadBtn.textContent = 'Reload Saved Data';
+  reloadBtn.title = 'Reload saved text into this form';
+
+  reloadBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    options.onReload();
+    reloadBtn.textContent = '✓ Data Reloaded!';
+    reloadBtn.style.background = '#10b981';
+    reloadBtn.style.borderColor = '#10b981';
+    setTimeout(() => {
+      dismissSiteRestorePrompt();
+    }, 1200);
+  });
+
+  const discardBtn = document.createElement('button');
+  discardBtn.type = 'button';
+  discardBtn.className = 'zw-site-prompt-btn-discard';
+  discardBtn.textContent = 'Discard Draft';
+  discardBtn.title = 'Permanently delete this saved draft';
+
+  discardBtn.addEventListener('click', (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    options.onDiscard();
+    dismissSiteRestorePrompt();
+  });
+
+  actions.appendChild(reloadBtn);
+  actions.appendChild(discardBtn);
+
+  prompt.appendChild(header);
+  prompt.appendChild(body);
+  prompt.appendChild(actions);
+
+  document.body.appendChild(prompt);
+  activeSitePrompt = prompt;
+
+  return prompt;
+}
+
+export function dismissSiteRestorePrompt(): void {
+  if (activeSitePrompt) {
+    activeSitePrompt.style.opacity = '0';
+    activeSitePrompt.style.transform = 'translateY(16px) scale(0.96)';
+    const el = activeSitePrompt;
+    activeSitePrompt = null;
+    setTimeout(() => {
+      el.remove();
+    }, 200);
+  }
+}
+
+/**
  * Removes all restore pills and form banners from the page.
  */
 export function removeAllRestorePills(): void {
+  dismissSiteRestorePrompt();
+
   for (const item of activePills) {
     item.target.removeAttribute(SALVAGE_ATTR);
     item.pill.remove();
