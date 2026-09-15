@@ -1,21 +1,29 @@
 /**
- * Pinterest Search Blocker — Logic Engine
- * Detects and conceals Pinterest login-walled results on search engines.
+ * Pinterest Search Blocker — Logic Engine 2.0
+ * Detects and conceals Pinterest login-walled results on search engines,
+ * with pill indicator and reveal capability.
  */
 
-import { injectPinterestBlockerStyles, removePinterestBlockerStyles } from './ui';
+import {
+  injectPinterestBlockerStyles,
+  removePinterestBlockerStyles,
+  showPinterestHiddenPill,
+} from './ui';
 import { recordProtectionEvent } from '../../content/storage';
 
-const PINTEREST_DOMAIN_REGEX = /(pinterest\.com|pinterest\.co|pinterest\.ca|pinterest\.de|pinterest\.fr|pinterest\.es|pinterest\.it|pinterest\.jp)/i;
+const PINTEREST_DOMAIN_REGEX =
+  /(pinterest\.com|pinterest\.co|pinterest\.ca|pinterest\.de|pinterest\.fr|pinterest\.es|pinterest\.it|pinterest\.jp)/i;
 
 export class PinterestBlocker {
   private isRunning = false;
   private observer: MutationObserver | null = null;
   private blockedElements = new WeakSet<Element>();
+  private totalHiddenOnPage = 0;
 
   public start(): void {
     if (this.isRunning) return;
     this.isRunning = true;
+    this.totalHiddenOnPage = 0;
 
     injectPinterestBlockerStyles();
     this.scan();
@@ -47,9 +55,10 @@ export class PinterestBlocker {
       const href = link.href || '';
       if (PINTEREST_DOMAIN_REGEX.test(href)) {
         // Find container result card
-        const card = link.closest<HTMLElement>(
-          'div[data-sokoban-container], div.g, div.isv-r, [data-ri], div[jscontroller], li'
-        ) || link;
+        const card =
+          link.closest<HTMLElement>(
+            'div[data-sokoban-container], div.g, div.isv-r, [data-ri], div[jscontroller], li'
+          ) || link;
 
         card.classList.add('zw-pinterest-hidden');
         newlyHidden++;
@@ -57,7 +66,14 @@ export class PinterestBlocker {
     });
 
     if (newlyHidden > 0) {
+      this.totalHiddenOnPage += newlyHidden;
       recordProtectionEvent('pinterestHidden', newlyHidden).catch(() => {});
+
+      showPinterestHiddenPill(this.totalHiddenOnPage, () => {
+        document.querySelectorAll('.zw-pinterest-hidden').forEach((el) => {
+          el.classList.remove('zw-pinterest-hidden');
+        });
+      });
     }
   }
 

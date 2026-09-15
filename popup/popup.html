@@ -21,6 +21,18 @@
       </div>
       <span class="zw-time-badge" id="hero-time-saved">—</span>
       <div class="zw-actions">
+        <button class="zw-icon-btn zw-btn-smash" id="zw-btn-smash" title="Panic: Smash overlays & restore scroll (Alt+Shift+X)" aria-label="Smash overlays">
+          <svg class="zw-icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#ff9f0a" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          </svg>
+        </button>
+        <button class="zw-icon-btn zw-btn-vault" id="zw-btn-vault" title="Saved Drafts Vault" aria-label="Saved Drafts Vault">
+          <svg class="zw-icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="21 8 21 21 3 21 3 8"/>
+            <rect x="1" y="3" width="22" height="5"/>
+            <line x1="10" y1="12" x2="14" y2="12"/>
+          </svg>
+        </button>
         <button class="zw-icon-btn zw-btn-refresh" id="zw-btn-refresh" title="Rescan page" aria-label="Rescan page">
           <svg class="zw-icon-svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
             <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
@@ -66,6 +78,14 @@
           </div>
         </div>
 
+        <!-- Site Whitelist / Status Row -->
+        <div class="zw-site-status-row" id="zw-site-status-row">
+          <button class="zw-site-pill" id="zw-site-whitelist-btn" type="button" title="Click to pause or enable ZenWeb on this domain">
+            <span class="zw-site-dot" id="zw-site-dot"></span>
+            <span class="zw-site-name" id="zw-site-name">Current Site</span>
+            <span class="zw-site-state" id="zw-site-state">Protected</span>
+          </button>
+        </div>
 
         <div class="zw-sep"></div>
 

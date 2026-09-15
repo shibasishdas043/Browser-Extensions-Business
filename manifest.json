@@ -11,15 +11,43 @@
     "page": "options/options.html",
     "open_in_tab": true
   },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
   "permissions": [
     "storage",
     "activeTab",
-    "scripting"
+    "scripting",
+    "contextMenus"
   ],
   "host_permissions": [
     "https://*/*",
     "http://*/*"
   ],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+Z",
+        "mac": "Alt+Shift+Z"
+      },
+      "description": "Open ZenWeb Quick Action Popup"
+    },
+    "smash-overlay": {
+      "suggested_key": {
+        "default": "Alt+Shift+X",
+        "mac": "Alt+Shift+X"
+      },
+      "description": "Panic Trigger: Smash Overlays & Restore Page Scroll"
+    },
+    "jump-recipe": {
+      "suggested_key": {
+        "default": "Alt+Shift+J",
+        "mac": "Alt+Shift+J"
+      },
+      "description": "Quick View: Extract & Jump to Recipe"
+    }
+  },
   "content_scripts": [
     {
       "matches": [

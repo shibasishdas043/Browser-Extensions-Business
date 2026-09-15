@@ -9,9 +9,11 @@ const DEFAULT_SETTINGS: ZenWebSettings = {
   pinterestBlockerEnabled: true,
   floatingVideoKillerEnabled: true,
   recipeSkipperEnabled: true,
+  recipeReaderEnabled: true,
   autoOverlaySmasherEnabled: true,
   fakeDownloadGuardEnabled: true,
   formSalvagerEnabled: true,
+  whitelistedDomains: [],
 };
 
 export const DEFAULT_STATS: ProtectionStats = {

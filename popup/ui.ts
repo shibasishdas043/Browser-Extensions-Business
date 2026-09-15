@@ -1,6 +1,14 @@
 import gsap from 'gsap';
-import { openFullSettings, loadSessionStats } from './logic';
-import { getSettings, updateSetting, onSettingsChange, onStatsChange, DEFAULT_SETTINGS } from '../utils/storage';
+import { openFullSettings, loadSessionStats, triggerSmashOverlay } from './logic';
+import {
+  getSettings,
+  updateSetting,
+  onSettingsChange,
+  onStatsChange,
+  DEFAULT_SETTINGS,
+  isDomainWhitelisted,
+  toggleDomainWhitelist,
+} from '../utils/storage';
 import { ProtectionStats, ZenWebSettings } from '../types';
 
 /* r=67: circumference = 2π×67 ≈ 420.97 */
@@ -63,6 +71,12 @@ class ZenWebPopupUI {
   private toggleSub!:       HTMLElement;
   private settingsBtn!:     HTMLButtonElement;
   private refreshBtn!:      HTMLButtonElement;
+  private smashBtn!:        HTMLButtonElement;
+  private vaultBtn!:        HTMLButtonElement;
+  private sitePillBtn!:     HTMLButtonElement;
+  private siteDotEl!:       HTMLElement;
+  private siteNameEl!:      HTMLElement;
+  private siteStateEl!:     HTMLElement;
   private toastEl!:         HTMLElement;
   private toastMsgEl!:      HTMLElement;
   private toastTimer:       number | null = null;
@@ -74,6 +88,8 @@ class ZenWebPopupUI {
   private totalBlocked = 74;
   private statVals     = [12, 4, 14, 28, 5, 3, 8];
   private currentSettings: ZenWebSettings = DEFAULT_SETTINGS;
+  private currentDomain = '';
+  private isCurrentSitePaused = false;
 
   constructor() {
     document.readyState === 'loading'
@@ -84,6 +100,7 @@ class ZenWebPopupUI {
   private async init() {
     this.bindRefs();
     this.bindEvents();
+    await this.initSiteContext();
     await this.loadStats();
 
     // Load persisted settings
@@ -92,8 +109,12 @@ class ZenWebPopupUI {
     this.applyProtectionState(this.isOn, false);
 
     // Subscribe to real-time 2-way storage synchronization
-    onSettingsChange((newSettings) => {
+    onSettingsChange(async (newSettings) => {
       this.currentSettings = newSettings;
+      if (this.currentDomain) {
+        this.isCurrentSitePaused = await isDomainWhitelisted(this.currentDomain);
+        this.updateSitePillUI();
+      }
       if (this.isOn !== newSettings.masterEnabled) {
         this.applyProtectionState(newSettings.masterEnabled, true);
       } else {
@@ -109,6 +130,37 @@ class ZenWebPopupUI {
       this.renderSpot(0, 'first');
       this.startSpotCycle();
       this.startHeroCycle();
+    }
+  }
+
+  private async initSiteContext() {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.tabs) {
+        const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
+        if (tab?.url) {
+          const u = new URL(tab.url);
+          this.currentDomain = u.hostname.replace(/^www\./, '');
+          this.isCurrentSitePaused = await isDomainWhitelisted(this.currentDomain);
+          this.updateSitePillUI();
+        }
+      }
+    } catch {
+      this.currentDomain = 'current-site';
+      this.updateSitePillUI();
+    }
+  }
+
+  private updateSitePillUI() {
+    if (!this.siteNameEl) return;
+    this.siteNameEl.textContent = this.currentDomain || 'Current Site';
+    if (this.isCurrentSitePaused) {
+      this.siteDotEl.classList.add('zw--paused');
+      this.siteStateEl.textContent = 'Paused';
+      this.sitePillBtn.style.borderColor = 'rgba(245, 158, 11, 0.35)';
+    } else {
+      this.siteDotEl.classList.remove('zw--paused');
+      this.siteStateEl.textContent = 'Protected';
+      this.sitePillBtn.style.borderColor = 'rgba(255, 255, 255, 0.1)';
     }
   }
 
@@ -136,6 +188,12 @@ class ZenWebPopupUI {
     this.toggleSub         = document.getElementById('zw-toggle-sub')!;
     this.settingsBtn       = document.getElementById('zw-btn-settings') as HTMLButtonElement;
     this.refreshBtn        = document.getElementById('zw-btn-refresh') as HTMLButtonElement;
+    this.smashBtn          = document.getElementById('zw-btn-smash') as HTMLButtonElement;
+    this.vaultBtn          = document.getElementById('zw-btn-vault') as HTMLButtonElement;
+    this.sitePillBtn       = document.getElementById('zw-site-whitelist-btn') as HTMLButtonElement;
+    this.siteDotEl         = document.getElementById('zw-site-dot')!;
+    this.siteNameEl        = document.getElementById('zw-site-name')!;
+    this.siteStateEl       = document.getElementById('zw-site-state')!;
     this.toastEl           = document.getElementById('zw-toast')!;
     this.toastMsgEl        = document.getElementById('zw-toast-message')!;
   }
@@ -156,6 +214,40 @@ class ZenWebPopupUI {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (tab?.id) { chrome.tabs.reload(tab.id); this.toast('Page rescanned ✓'); }
       }
+    });
+
+    // Panic Smash Button
+    this.smashBtn?.addEventListener('click', async () => {
+      const icon = this.smashBtn.querySelector('.zw-icon-svg');
+      if (icon) {
+        gsap.fromTo(icon, { scale: 0.8 }, { scale: 1.3, duration: 0.2, yoyo: true, repeat: 1, ease: 'power2.out' });
+      }
+      this.pressAnim(this.smashBtn);
+      const res = await triggerSmashOverlay();
+      this.toast(res.message, res.success ? 'active' : 'deactive');
+    });
+
+    // Vault Button
+    this.vaultBtn?.addEventListener('click', () => {
+      this.pressAnim(this.vaultBtn);
+      if (typeof chrome !== 'undefined' && chrome.tabs && chrome.runtime?.getURL) {
+        chrome.tabs.create({ url: chrome.runtime.getURL('options/options.html#vault') });
+      } else {
+        openFullSettings();
+      }
+    });
+
+    // Per-Site Whitelist Toggle Pill
+    this.sitePillBtn?.addEventListener('click', async () => {
+      if (!this.currentDomain) return;
+      this.pressAnim(this.sitePillBtn);
+      const nowWhitelisted = await toggleDomainWhitelist(this.currentDomain);
+      this.isCurrentSitePaused = nowWhitelisted;
+      this.updateSitePillUI();
+      this.toast(
+        nowWhitelisted ? `Paused on ${this.currentDomain}` : `Protected on ${this.currentDomain}`,
+        nowWhitelisted ? 'deactive' : 'active'
+      );
     });
 
     // Master Toggle switch (Pixel Checkbox)

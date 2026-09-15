@@ -8,11 +8,14 @@ import {
   Hammer, AlertTriangle, FileText, Lock,
   Sparkles, Check, RotateCcw, Sun, Moon,
   Heart, Coffee, ExternalLink, Archive, Copy, Trash2, X, CheckCircle2,
+  Globe, Download, Upload, Command, Plus,
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import {
   getSettings, updateSetting, saveSettings,
   DEFAULT_SETTINGS, getStats, resetStats, onSettingsChange, onStatsChange,
+  addDomainToWhitelist, removeDomainFromWhitelist,
+  exportSettingsAndDrafts, importSettingsAndDrafts,
 } from '@/utils/storage';
 import { ZenWebSettings, ProtectionStats, SettingKey } from '@/types';
 import { getAllSavedDrafts, deleteSavedDraft, StoredDraft } from '@/features/form-salvager/logic';
@@ -39,6 +42,7 @@ const PROTECTIONS: ProtectionItem[] = [
   { key: 'pinterestBlockerEnabled',  statKey: 'pinterestHidden',      category: 'search',   categoryLabel: 'Search & Discovery', name: 'Pinterest Wall Demolisher',     description: 'Silently conceals Pinterest boards and forced-signup preview walls from image search results.',                             targetScope: 'Image & Web Search',      icon: PinOff,        statUnit: 'walled pins hidden'       },
   { key: 'floatingVideoKillerEnabled',statKey: 'videosSuppressed',    category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Sticky Video Suppressor',       description: 'Neutralizes picture-in-picture commercial players that float and follow your viewport scroll.',                            targetScope: 'News & Media Outlets',    icon: VideoOff,      statUnit: 'floating players silenced'},
   { key: 'recipeSkipperEnabled',     statKey: 'recipesSkipped',       category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Recipe Story Fluff Skipper',   description: 'Parses recipe JSON-LD schema to auto-surface ingredients and instructions instantly without life stories.',                  targetScope: 'Food & Cooking Sites',    icon: ChefHat,       statUnit: 'stories skipped'          },
+  { key: 'recipeReaderEnabled',      statKey: 'recipesSkipped',       category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Recipe Reader View',           description: 'Presents a clean, distraction-free modal overlay of ingredients with interactive checklist and steps.',                     targetScope: 'Food & Cooking Sites',    icon: ChefHat,       statUnit: 'clean views generated'    },
   { key: 'autoOverlaySmasherEnabled',statKey: 'overlaysSmashed',      category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Modal & Paywall Smasher',      description: 'Detects screen-darkening newsletter modals, smashing backdrops and restoring scrolling.',                                  targetScope: 'All Webpages',            icon: Hammer,        statUnit: 'modals neutralized'       },
 ];
 
@@ -123,6 +127,8 @@ export function Dashboard() {
   const [vaultOpen, setVaultOpen]       = useState(false);
   const [vaultDrafts, setVaultDrafts]   = useState<StoredDraft[]>([]);
   const [copiedKey, setCopiedKey]       = useState<string | null>(null);
+  const [newDomain, setNewDomain]       = useState('');
+  const fileInputRef                    = useRef<HTMLInputElement>(null);
   const [, startTransition]             = useTransition();
 
   const handleOpenVault = async () => {
@@ -142,6 +148,77 @@ export function Dashboard() {
     await deleteSavedDraft(key);
     setVaultDrafts((prev) => prev.filter((d) => d.fieldKey !== key));
     showToast('Draft removed from storage');
+  };
+
+  const handleAddDomain = async (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    let clean = newDomain.trim().toLowerCase();
+    clean = clean.replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].split(':')[0];
+    if (!clean) return;
+
+    if (settings.whitelistedDomains?.includes(clean)) {
+      showToast(`${clean} is already excluded`);
+      setNewDomain('');
+      return;
+    }
+
+    const updated = await addDomainToWhitelist(clean);
+    setSettings((prev) => ({ ...prev, whitelistedDomains: updated }));
+    setNewDomain('');
+    showToast(`Added ${clean} to exclusions`);
+  };
+
+  const handleRemoveDomain = async (domain: string) => {
+    const updated = await removeDomainFromWhitelist(domain);
+    setSettings((prev) => ({ ...prev, whitelistedDomains: updated }));
+    showToast(`Removed ${domain} from exclusions`);
+  };
+
+  const handleExportBackup = async () => {
+    try {
+      const jsonStr = await exportSettingsAndDrafts();
+      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const dateStr = new Date().toISOString().slice(0, 10);
+      a.href = url;
+      a.download = `zenweb-backup-${dateStr}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('Exported ZenWeb backup JSON');
+    } catch (err) {
+      console.error('Export failed:', err);
+      showToast('Failed to export backup');
+    }
+  };
+
+  const handleImportBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      const reader = new FileReader();
+      reader.onload = async (event) => {
+        const content = event.target?.result as string;
+        if (!content) return;
+        const success = await importSettingsAndDrafts(content);
+        if (success) {
+          const [freshSettings, freshStats] = await Promise.all([getSettings(), getStats()]);
+          setSettings(freshSettings);
+          setStats(freshStats);
+          showToast('Backup restored successfully!');
+        } else {
+          showToast('Invalid backup file format');
+        }
+        if (fileInputRef.current) fileInputRef.current.value = '';
+      };
+      reader.readAsText(file);
+    } catch (err) {
+      console.error('Import error:', err);
+      showToast('Error importing file');
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
   };
 
   /* refs for GSAP */
@@ -449,7 +526,7 @@ export function Dashboard() {
               style={{ fontSize: 12, fontWeight: 500, backgroundColor: cv('--zw-bg-status'), color: cv('--zw-text-primary'), border: `1px solid ${cv('--zw-border-status')}` }}
             >
               <span className="inline-block rounded-full" style={{ width: 7, height: 7, backgroundColor: settings.masterEnabled ? '#34c759' : '#ff9500', transition: 'background-color 0.3s' }} />
-              {settings.masterEnabled ? `${activeCount} of 7 Active` : 'Paused'}
+              {settings.masterEnabled ? `${activeCount} of ${PROTECTIONS.length} Active` : 'Paused'}
             </div>
 
             <button onClick={handleResetDefaults} className="apple-press apple-link hidden items-center gap-1 sm:flex" style={{ fontSize: 12 }}>
@@ -644,6 +721,219 @@ export function Dashboard() {
                 </div>
               );
             })}
+          </div>
+        </section>
+
+        {/* ── Excluded Websites (Whitelist Manager) ──────── */}
+        <section data-block>
+          <div className="mb-4 flex flex-col gap-1 px-1">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="apple-display-lg" style={{ fontSize: 21, margin: 0, color: cv('--zw-text-primary') }}>
+                  Excluded Websites
+                </h2>
+                <p style={{ fontSize: 14, color: cv('--zw-text-secondary'), margin: '4px 0 0', lineHeight: 1.43 }}>
+                  Shields are completely bypassed on these domains to preserve compatibility with internal tools or web apps.
+                </p>
+              </div>
+              <span
+                className="rounded-full px-2.5 py-1 text-xs font-semibold"
+                style={{
+                  backgroundColor: cv('--zw-bg-chip'),
+                  color: cv('--zw-text-tertiary'),
+                }}
+              >
+                {settings.whitelistedDomains?.length || 0} Excluded
+              </span>
+            </div>
+          </div>
+
+          <div className="apple-card p-6 flex flex-col gap-5">
+            {/* Input row */}
+            <form onSubmit={handleAddDomain} className="flex flex-col sm:flex-row gap-2.5 items-stretch">
+              <div className="relative flex-1">
+                <div className="absolute inset-y-0 left-3 flex items-center pointer-events-none" style={{ color: cv('--zw-text-tertiary') }}>
+                  <Globe style={{ width: 16, height: 16 }} />
+                </div>
+                <input
+                  type="text"
+                  value={newDomain}
+                  onChange={(e) => setNewDomain(e.target.value)}
+                  placeholder="e.g. github.com, internal.company.net"
+                  className="w-full pl-9 pr-4 py-2 rounded-[10px] text-sm outline-none transition-colors"
+                  style={{
+                    backgroundColor: cv('--zw-bg-scope'),
+                    border: `1px solid ${cv('--zw-border-scope')}`,
+                    color: cv('--zw-text-primary'),
+                  }}
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={!newDomain.trim()}
+                className="apple-press inline-flex items-center justify-center gap-1.5 px-4 py-2 rounded-[10px] text-sm font-semibold text-white transition-opacity"
+                style={{
+                  backgroundColor: cv('--zw-text-link'),
+                  opacity: newDomain.trim() ? 1 : 0.5,
+                  cursor: newDomain.trim() ? 'pointer' : 'not-allowed',
+                }}
+              >
+                <Plus style={{ width: 15, height: 15, strokeWidth: 2.5 }} />
+                <span>Add Domain</span>
+              </button>
+            </form>
+
+            {/* Domains chips */}
+            <div
+              className="p-4 rounded-[12px] flex flex-wrap gap-2 min-h-[64px] items-center"
+              style={{
+                backgroundColor: cv('--zw-bg-scope'),
+                border: `1px solid ${cv('--zw-border-scope')}`,
+              }}
+            >
+              {(!settings.whitelistedDomains || settings.whitelistedDomains.length === 0) ? (
+                <span className="text-xs" style={{ color: cv('--zw-text-tertiary') }}>
+                  No domains excluded yet. All ZenWeb protections are currently guarding your browsing across every site.
+                </span>
+              ) : (
+                settings.whitelistedDomains.map((domain) => (
+                  <span
+                    key={domain}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-medium"
+                    style={{
+                      backgroundColor: cv('--zw-bg-card'),
+                      border: `1px solid ${cv('--zw-border-card')}`,
+                      color: cv('--zw-text-primary'),
+                      boxShadow: cv('--zw-chip-sel-shadow'),
+                    }}
+                  >
+                    <Globe style={{ width: 12, height: 12, color: cv('--zw-text-link') }} />
+                    <span>{domain}</span>
+                    <button
+                      type="button"
+                      onClick={() => handleRemoveDomain(domain)}
+                      className="apple-press hover:text-red-500 rounded-full p-0.5"
+                      style={{ color: cv('--zw-text-tertiary') }}
+                      title={`Remove ${domain}`}
+                      aria-label={`Remove ${domain} from whitelist`}
+                    >
+                      <X style={{ width: 12, height: 12, strokeWidth: 2.5 }} />
+                    </button>
+                  </span>
+                ))
+              )}
+            </div>
+          </div>
+        </section>
+
+        {/* ── Backup & Shortcuts ────────────────────────── */}
+        <section data-block className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Card 1: Backup & Migration */}
+          <div className="apple-card p-6 flex flex-col justify-between gap-5">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: cv('--zw-text-link') }}>
+                  Data Portability
+                </span>
+                <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ color: '#0891b2', backgroundColor: 'rgba(6, 182, 212, 0.12)' }}>
+                  JSON Backup
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex shrink-0 items-center justify-center rounded-[10px]" style={{ width: 36, height: 36, backgroundColor: cv('--zw-bg-icon'), border: `1px solid ${cv('--zw-border-card')}` }}>
+                  <Archive style={{ width: 17, height: 17, color: cv('--zw-text-primary') }} />
+                </div>
+                <h3 className="apple-body-strong" style={{ margin: 0, color: cv('--zw-text-primary') }}>
+                  Backup &amp; Migration
+                </h3>
+              </div>
+              <p style={{ fontSize: 14, color: cv('--zw-text-secondary'), lineHeight: 1.43, margin: 0 }}>
+                Export your complete settings, domain exclusion lists, and saved form drafts into an offline JSON snapshot.
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3 pt-4" style={{ borderTop: `1px solid ${cv('--zw-border-divider')}` }}>
+              <button
+                type="button"
+                onClick={handleExportBackup}
+                className="apple-press inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] text-xs font-semibold text-white"
+                style={{ backgroundColor: cv('--zw-text-link'), border: 'none', cursor: 'pointer' }}
+              >
+                <Download style={{ width: 14, height: 14 }} />
+                <span>Export Backup</span>
+              </button>
+
+              <label
+                className="apple-press inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] text-xs font-medium cursor-pointer"
+                style={{
+                  backgroundColor: cv('--zw-bg-scope'),
+                  border: `1px solid ${cv('--zw-border-card')}`,
+                  color: cv('--zw-text-primary'),
+                }}
+              >
+                <Upload style={{ width: 14, height: 14, color: cv('--zw-text-secondary') }} />
+                <span>Import Backup</span>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json"
+                  onChange={handleImportBackup}
+                  className="hidden"
+                />
+              </label>
+            </div>
+          </div>
+
+          {/* Card 2: Keyboard Shortcuts Guide */}
+          <div className="apple-card p-6 flex flex-col justify-between gap-5">
+            <div className="flex flex-col gap-2">
+              <div className="flex items-center justify-between">
+                <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: cv('--zw-text-link') }}>
+                  Power User
+                </span>
+                <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ color: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.12)' }}>
+                  Hotkeys
+                </span>
+              </div>
+              <div className="flex items-center gap-3">
+                <div className="flex shrink-0 items-center justify-center rounded-[10px]" style={{ width: 36, height: 36, backgroundColor: cv('--zw-bg-icon'), border: `1px solid ${cv('--zw-border-card')}` }}>
+                  <Command style={{ width: 17, height: 17, color: cv('--zw-text-primary') }} />
+                </div>
+                <h3 className="apple-body-strong" style={{ margin: 0, color: cv('--zw-text-primary') }}>
+                  Keyboard Shortcuts
+                </h3>
+              </div>
+              <p style={{ fontSize: 14, color: cv('--zw-text-secondary'), lineHeight: 1.43, margin: 0 }}>
+                Trigger instant shields, bypass modal locks, and open clean reading modes from anywhere.
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-2 pt-4" style={{ borderTop: `1px solid ${cv('--zw-border-divider')}` }}>
+              <div className="flex items-center justify-between text-xs">
+                <span style={{ color: cv('--zw-text-secondary') }}>Panic Overlay Smash</span>
+                <kbd className="px-2 py-1 rounded-[6px] font-mono text-[11px] font-semibold" style={{ backgroundColor: cv('--zw-bg-scope'), border: `1px solid ${cv('--zw-border-scope')}`, color: cv('--zw-text-primary') }}>
+                  Alt + Shift + X
+                </kbd>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span style={{ color: cv('--zw-text-secondary') }}>Recipe Reader View</span>
+                <kbd className="px-2 py-1 rounded-[6px] font-mono text-[11px] font-semibold" style={{ backgroundColor: cv('--zw-bg-scope'), border: `1px solid ${cv('--zw-border-scope')}`, color: cv('--zw-text-primary') }}>
+                  Alt + Shift + J
+                </kbd>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span style={{ color: cv('--zw-text-secondary') }}>Restore Form Drafts</span>
+                <kbd className="px-2 py-1 rounded-[6px] font-mono text-[11px] font-semibold" style={{ backgroundColor: cv('--zw-bg-scope'), border: `1px solid ${cv('--zw-border-scope')}`, color: cv('--zw-text-primary') }}>
+                  Alt + R
+                </kbd>
+              </div>
+              <div className="flex items-center justify-between text-xs">
+                <span style={{ color: cv('--zw-text-secondary') }}>Quick Panic Escape</span>
+                <kbd className="px-2 py-1 rounded-[6px] font-mono text-[11px] font-semibold" style={{ backgroundColor: cv('--zw-bg-scope'), border: `1px solid ${cv('--zw-border-scope')}`, color: cv('--zw-text-primary') }}>
+                  Double Esc
+                </kbd>
+              </div>
+            </div>
           </div>
         </section>
 

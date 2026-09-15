@@ -6,9 +6,11 @@ export const DEFAULT_SETTINGS: ZenWebSettings = {
   pinterestBlockerEnabled: true,
   floatingVideoKillerEnabled: true,
   recipeSkipperEnabled: true,
+  recipeReaderEnabled: true,
   autoOverlaySmasherEnabled: true,
   fakeDownloadGuardEnabled: true,
   formSalvagerEnabled: true,
+  whitelistedDomains: [],
 };
 
 export const DEFAULT_STATS: ProtectionStats = {
@@ -73,6 +75,127 @@ export async function updateSetting<K extends SettingKey>(
   };
   await saveSettings(updated);
   return updated;
+}
+
+/**
+ * Checks if a domain or its parent domain is whitelisted.
+ */
+export async function isDomainWhitelisted(domain: string): Promise<boolean> {
+  const settings = await getSettings();
+  const cleanDomain = domain.toLowerCase().replace(/^www\./, '');
+  return settings.whitelistedDomains.some((d) => {
+    const cd = d.toLowerCase().replace(/^www\./, '');
+    return cleanDomain === cd || cleanDomain.endsWith('.' + cd);
+  });
+}
+
+/**
+ * Adds a domain to the whitelist.
+ */
+export async function addDomainToWhitelist(domain: string): Promise<string[]> {
+  const settings = await getSettings();
+  const cleanDomain = domain.toLowerCase().replace(/^www\./, '').trim();
+  if (!cleanDomain) return settings.whitelistedDomains;
+
+  const current = new Set(settings.whitelistedDomains.map((d) => d.toLowerCase().replace(/^www\./, '')));
+  current.add(cleanDomain);
+
+  const updated = Array.from(current);
+  await updateSetting('whitelistedDomains', updated);
+  return updated;
+}
+
+/**
+ * Removes a domain from the whitelist.
+ */
+export async function removeDomainFromWhitelist(domain: string): Promise<string[]> {
+  const settings = await getSettings();
+  const cleanDomain = domain.toLowerCase().replace(/^www\./, '').trim();
+
+  const updated = settings.whitelistedDomains.filter(
+    (d) => d.toLowerCase().replace(/^www\./, '') !== cleanDomain
+  );
+  await updateSetting('whitelistedDomains', updated);
+  return updated;
+}
+
+/**
+ * Toggles a domain on or off the whitelist.
+ */
+export async function toggleDomainWhitelist(domain: string): Promise<boolean> {
+  const whitelisted = await isDomainWhitelisted(domain);
+  if (whitelisted) {
+    await removeDomainFromWhitelist(domain);
+    return false;
+  } else {
+    await addDomainToWhitelist(domain);
+    return true;
+  }
+}
+
+/**
+ * Exports all settings and saved drafts to a downloadable JSON payload.
+ */
+export async function exportSettingsAndDrafts(): Promise<string> {
+  const settings = await getSettings();
+  const stats = await getStats();
+  const drafts: Record<string, any> = {};
+
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+      const all = await chrome.storage.local.get(null);
+      for (const [k, v] of Object.entries(all)) {
+        if (k.startsWith('zenweb_draft_')) {
+          drafts[k] = v;
+        }
+      }
+    } else {
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('zenweb_draft_')) {
+          drafts[k] = JSON.parse(localStorage.getItem(k) || '{}');
+        }
+      }
+    }
+  } catch {}
+
+  const backup = {
+    version: '1.0.0',
+    timestamp: Date.now(),
+    settings,
+    stats,
+    drafts,
+  };
+
+  return JSON.stringify(backup, null, 2);
+}
+
+/**
+ * Imports settings and drafts from a JSON backup.
+ */
+export async function importSettingsAndDrafts(jsonStr: string): Promise<boolean> {
+  try {
+    const data = JSON.parse(jsonStr);
+    if (!data || typeof data !== 'object') return false;
+
+    if (data.settings && typeof data.settings === 'object') {
+      await saveSettings({ ...DEFAULT_SETTINGS, ...data.settings });
+    }
+
+    if (data.drafts && typeof data.drafts === 'object') {
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        await chrome.storage.local.set(data.drafts);
+      } else {
+        for (const [k, v] of Object.entries(data.drafts)) {
+          localStorage.setItem(k, JSON.stringify(v));
+        }
+      }
+    }
+    return true;
+  } catch (err) {
+    console.error('Failed to import backup:', err);
+    return false;
+  }
 }
 
 /**
@@ -168,4 +291,5 @@ export async function resetStats(): Promise<ProtectionStats> {
   }
   return freshStats;
 }
+
 

@@ -30,6 +30,7 @@ export default defineConfig({
         popup: fileURLToPath(new URL('./popup/popup.html', import.meta.url)),
         options: fileURLToPath(new URL('./options/options.html', import.meta.url)),
         content: fileURLToPath(new URL('./content/index.ts', import.meta.url)),
+        background: fileURLToPath(new URL('./background/background.ts', import.meta.url)),
       },
       output: {
         entryFileNames: '[name].js',
