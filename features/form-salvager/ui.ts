@@ -47,6 +47,58 @@ let activeSitePrompt: HTMLElement | null = null;
 let windowListenersAttached = false;
 
 /**
+ * Checks if the current window is on a search engine page (Google, Bing, DuckDuckGo, etc.).
+ */
+export function isSearchEnginePage(): boolean {
+  if (typeof window === 'undefined' || !window.location) return false;
+  try {
+    const raw = window.location.hostname;
+    const host = raw.toLowerCase().replace(/^www\./, '');
+    if (
+      host.startsWith('mail.google.') ||
+      host.startsWith('docs.google.') ||
+      host.startsWith('drive.google.') ||
+      host.startsWith('calendar.google.') ||
+      host.startsWith('meet.google.') ||
+      host.startsWith('chat.google.')
+    ) {
+      return false;
+    }
+    return (
+      host === 'google.com' ||
+      host.endsWith('.google.com') ||
+      host.includes('google.') ||
+      host === 'bing.com' ||
+      host.endsWith('.bing.com') ||
+      host === 'duckduckgo.com' ||
+      host.endsWith('.duckduckgo.com') ||
+      host === 'search.brave.com' ||
+      host === 'brave.com' ||
+      host === 'yahoo.com' ||
+      host.endsWith('.yahoo.com') ||
+      host === 'ecosia.org' ||
+      host.endsWith('.ecosia.org') ||
+      host === 'startpage.com' ||
+      host.endsWith('.startpage.com') ||
+      host === 'kagi.com' ||
+      host.endsWith('.kagi.com') ||
+      host === 'qwant.com' ||
+      host.endsWith('.qwant.com') ||
+      host.includes('yandex.') ||
+      host === 'baidu.com' ||
+      host.endsWith('.baidu.com') ||
+      host === 'ask.com' ||
+      host.endsWith('.ask.com') ||
+      host === 'search.aol.com' ||
+      host === 'naver.com' ||
+      host.endsWith('.naver.com')
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Injects Apple glassmorphism styling for restore pills, hover popovers, and form banners.
  */
 export function injectFormSalvagerStyles(): void {
@@ -677,7 +729,9 @@ export function showRestorePill(
   meta: DraftMeta,
   onRestore: () => void,
   onDiscard: () => void
-): HTMLElement {
+): HTMLElement | null {
+  if (isSearchEnginePage()) return null;
+
   injectFormSalvagerStyles();
   dismissRestorePill(target);
 
@@ -806,7 +860,9 @@ export function showFormLevelBanner(
   fieldCount: number,
   onRestoreAll: () => void,
   onDismissAll: () => void
-): HTMLElement {
+): HTMLElement | null {
+  if (isSearchEnginePage()) return null;
+
   injectFormSalvagerStyles();
   dismissFormLevelBanner(form);
 
@@ -884,7 +940,9 @@ export function dismissRestorePill(target: HTMLElement): void {
 /**
  * Displays a floating Apple-styled pop-up prompt in the corner offering to reload saved form data.
  */
-export function showSiteRestorePrompt(options: SitePromptOptions): HTMLElement {
+export function showSiteRestorePrompt(options: SitePromptOptions): HTMLElement | null {
+  if (isSearchEnginePage()) return null;
+
   injectFormSalvagerStyles();
   dismissSiteRestorePrompt();
 

@@ -43,6 +43,63 @@ const SENSITIVE_AUTOCOMPLETE_REGEX = /(password|current-password|new-password|cc
 export const DRAFT_PREFIX = 'zenweb_draft_';
 const TTL_MS = 48 * 60 * 60 * 1000; // 48-hour retention
 
+/**
+ * Detects whether a URL or hostname belongs to a search engine (Google, Bing, DuckDuckGo, etc.).
+ * Search engines are for queries, not persistent form drafts.
+ */
+export function isSearchEngineSite(urlOrHost: string = typeof window !== 'undefined' ? window.location.href : ''): boolean {
+  if (!urlOrHost) return false;
+  try {
+    const raw = urlOrHost.includes('://') ? new URL(urlOrHost).hostname : urlOrHost;
+    const host = raw.toLowerCase().replace(/^www\./, '');
+
+    // Exclude productivity subdomains
+    if (
+      host.startsWith('mail.google.') ||
+      host.startsWith('docs.google.') ||
+      host.startsWith('drive.google.') ||
+      host.startsWith('calendar.google.') ||
+      host.startsWith('meet.google.') ||
+      host.startsWith('chat.google.')
+    ) {
+      return false;
+    }
+
+    return (
+      host === 'google.com' ||
+      host.endsWith('.google.com') ||
+      host.includes('google.') ||
+      host === 'bing.com' ||
+      host.endsWith('.bing.com') ||
+      host === 'duckduckgo.com' ||
+      host.endsWith('.duckduckgo.com') ||
+      host === 'search.brave.com' ||
+      host === 'brave.com' ||
+      host === 'search.yahoo.com' ||
+      host === 'yahoo.com' ||
+      host.endsWith('.yahoo.com') ||
+      host === 'ecosia.org' ||
+      host.endsWith('.ecosia.org') ||
+      host === 'startpage.com' ||
+      host.endsWith('.startpage.com') ||
+      host === 'kagi.com' ||
+      host.endsWith('.kagi.com') ||
+      host === 'qwant.com' ||
+      host.endsWith('.qwant.com') ||
+      host.includes('yandex.') ||
+      host === 'baidu.com' ||
+      host.endsWith('.baidu.com') ||
+      host === 'ask.com' ||
+      host.endsWith('.ask.com') ||
+      host === 'search.aol.com' ||
+      host === 'naver.com' ||
+      host.endsWith('.naver.com')
+    );
+  } catch {
+    return false;
+  }
+}
+
 export class FormSalvager {
   private isRunning = false;
   private inputListener: ((e: Event) => void) | null = null;
@@ -56,6 +113,14 @@ export class FormSalvager {
     this.isRunning = true;
 
     this.purgeExpiredDrafts().catch(() => {});
+
+    // Search engines (Google, Bing, DuckDuckGo, etc.) must NEVER salvage drafts or show restore prompts
+    if (isSearchEngineSite()) {
+      this.purgeSearchEngineDrafts().catch(() => {});
+      removeAllRestorePills();
+      return;
+    }
+
     this.attachListeners();
     this.checkForRecoverableDrafts();
     this.startObserver();
@@ -155,12 +220,97 @@ export class FormSalvager {
   }
 
   /**
+   * Detects whether an element is a search bar or search query input.
+   * Search queries must never be treated as unsubmitted form drafts.
+   */
+  public isSearchField(el: HTMLElement): boolean {
+    if (el instanceof HTMLInputElement && (el.type || '').toLowerCase() === 'search') {
+      return true;
+    }
+
+    const role = (el.getAttribute('role') || '').toLowerCase();
+    if (role === 'searchbox' || role === 'search') {
+      return true;
+    }
+
+    const name = (el.getAttribute('name') || '').toLowerCase();
+    const searchNames = [
+      'q',
+      'query',
+      'search',
+      'search_query',
+      'searchterm',
+      'search_term',
+      'keyword',
+      'keywords',
+      's',
+      'field-keywords',
+    ];
+    if (searchNames.includes(name)) {
+      return true;
+    }
+
+    const id = (el.id || '').toLowerCase();
+    const searchIds = [
+      'search',
+      'searchbox',
+      'search-box',
+      'search_form_input',
+      'search_form_input_homepage',
+      'sb_form_q',
+      'twotabsearchtextbox',
+      'nav-search-keywords',
+    ];
+    if (searchIds.includes(id) || id.includes('searchbox')) {
+      return true;
+    }
+
+    if (
+      el.closest(
+        'form[role="search"], [role="search"], form#sb_form, form#tsf, form#search_form, form.header__form, form.search-form, form.searchbox, .b_searchboxForm, .RNNXgb, .searchbox, #searchform, form[action*="/search"], form[action*="/results"]'
+      )
+    ) {
+      return true;
+    }
+
+    const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
+    const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+    if (
+      placeholder.startsWith('search') ||
+      placeholder.includes('search...') ||
+      placeholder.includes('search here') ||
+      ariaLabel.includes('search query') ||
+      ariaLabel.includes('search the web') ||
+      ariaLabel.startsWith('search')
+    ) {
+      if (
+        el instanceof HTMLInputElement ||
+        el.tagName === 'INPUT' ||
+        (el instanceof HTMLTextAreaElement && (name === 'q' || ariaLabel.includes('search')))
+      ) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
    * Evaluates whether an element is an eligible text input while strictly enforcing privacy blacklists.
    */
   public isSalvagableField(el: HTMLElement): boolean {
+    // 0. Search engine sites and search inputs are NEVER salvagable forms
+    if (isSearchEngineSite()) {
+      return false;
+    }
+
+    if (this.isSearchField(el)) {
+      return false;
+    }
+
     if (el instanceof HTMLInputElement) {
       const type = (el.type || 'text').toLowerCase();
-      const allowedTypes = ['text', 'search', 'url', 'email', 'tel'];
+      const allowedTypes = ['text', 'url', 'email', 'tel'];
       if (!allowedTypes.includes(type)) return false;
     } else if (el instanceof HTMLTextAreaElement) {
       // Allowed
@@ -196,6 +346,8 @@ export class FormSalvager {
    * Debounces and saves user text input to persistent local storage with multi-revision tracking.
    */
   private handleInput(el: HTMLElement): void {
+    if (isSearchEngineSite() || this.isSearchField(el)) return;
+
     const val = this.getElementValue(el);
     const key = this.getElementStorageKey(el);
 
@@ -264,6 +416,11 @@ export class FormSalvager {
    * Coordinates form-level "Restore All" banners and floating site-level reload prompts.
    */
   public async checkForRecoverableDrafts(): Promise<void> {
+    if (isSearchEngineSite()) {
+      removeAllRestorePills();
+      return;
+    }
+
     const candidates = document.querySelectorAll<HTMLElement>(
       'textarea, input, [contenteditable="true"], [role="textbox"]'
     );
@@ -567,9 +724,11 @@ export class FormSalvager {
         const all = await chrome.storage.local.get(null);
         const keysToRemove: string[] = [];
         for (const [k, v] of Object.entries(all)) {
-          if (k.startsWith(DRAFT_PREFIX) && v && typeof v === 'object' && 'timestamp' in v) {
+          if (k.startsWith(DRAFT_PREFIX) && v && typeof v === 'object') {
             const draft = v as StoredDraft;
-            if (now - draft.timestamp > TTL_MS) {
+            const isExpired = draft.timestamp && now - draft.timestamp > TTL_MS;
+            const isSearch = isSearchEngineSite(draft.url || draft.siteUrl || '');
+            if (isExpired || isSearch) {
               keysToRemove.push(k);
             }
           }
@@ -586,7 +745,47 @@ export class FormSalvager {
         if (k && k.startsWith(DRAFT_PREFIX)) {
           try {
             const draft = JSON.parse(localStorage.getItem(k) || '{}') as StoredDraft;
-            if (draft.timestamp && now - draft.timestamp > TTL_MS) {
+            const isExpired = draft.timestamp && now - draft.timestamp > TTL_MS;
+            const isSearch = isSearchEngineSite(draft.url || draft.siteUrl || '');
+            if (isExpired || isSearch) {
+              toRemove.push(k);
+            }
+          } catch {}
+        }
+      }
+      toRemove.forEach((k) => localStorage.removeItem(k));
+    } catch {}
+  }
+
+  /**
+   * Purges all drafts saved for search engines from local storage.
+   */
+  public async purgeSearchEngineDrafts(): Promise<void> {
+    try {
+      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+        const all = await chrome.storage.local.get(null);
+        const keysToRemove: string[] = [];
+        for (const [k, v] of Object.entries(all)) {
+          if (k.startsWith(DRAFT_PREFIX) && v && typeof v === 'object') {
+            const draft = v as StoredDraft;
+            if (isSearchEngineSite(draft.url || draft.siteUrl || '')) {
+              keysToRemove.push(k);
+            }
+          }
+        }
+        if (keysToRemove.length > 0) {
+          await chrome.storage.local.remove(keysToRemove);
+        }
+        return;
+      }
+
+      const toRemove: string[] = [];
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith(DRAFT_PREFIX)) {
+          try {
+            const draft = JSON.parse(localStorage.getItem(k) || '{}') as StoredDraft;
+            if (isSearchEngineSite(draft.url || draft.siteUrl || '')) {
               toRemove.push(k);
             }
           } catch {}
@@ -655,7 +854,10 @@ export async function getAllSavedDrafts(): Promise<StoredDraft[]> {
       const all = await chrome.storage.local.get(null);
       for (const [k, v] of Object.entries(all)) {
         if (k.startsWith(DRAFT_PREFIX) && v && typeof v === 'object' && 'value' in v) {
-          drafts.push(v as StoredDraft);
+          const draft = v as StoredDraft;
+          if (!isSearchEngineSite(draft.url || draft.siteUrl || '')) {
+            drafts.push(draft);
+          }
         }
       }
     } else {
@@ -663,7 +865,10 @@ export async function getAllSavedDrafts(): Promise<StoredDraft[]> {
         const k = localStorage.key(i);
         if (k && k.startsWith(DRAFT_PREFIX)) {
           try {
-            drafts.push(JSON.parse(localStorage.getItem(k) || '{}') as StoredDraft);
+            const draft = JSON.parse(localStorage.getItem(k) || '{}') as StoredDraft;
+            if (!isSearchEngineSite(draft.url || draft.siteUrl || '')) {
+              drafts.push(draft);
+            }
           } catch {}
         }
       }

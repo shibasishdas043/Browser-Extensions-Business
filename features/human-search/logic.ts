@@ -12,26 +12,13 @@ import {
   removeHumanSearchUI,
 } from './ui';
 import { recordProtectionEvent } from '../../content/storage';
+import {
+  PROMINENT_DISCUSSION_DOMAINS,
+  FORUM_SEARCH_QUERY,
+  SEO_FARM_DOMAINS,
+} from './constants';
 
-const DISCUSSION_DOMAINS = [
-  'reddit.com',
-  'news.ycombinator.com',
-  'stackoverflow.com',
-  'stackexchange.com',
-  'github.com/orgs',
-  'github.com/discussions',
-  'quora.com',
-  'lobste.rs',
-];
-
-const SEO_FARM_DOMAINS = [
-  'geeksforgeeks.org',
-  'w3schools.com',
-  'tutorialspoint.com',
-  'javatpoint.com',
-  'guru99.com',
-  'programmingsimplified.com',
-];
+export { PROMINENT_DISCUSSION_DOMAINS, FORUM_SEARCH_QUERY, SEO_FARM_DOMAINS };
 
 export class HumanSearchBypass {
   private isRunning = false;
@@ -39,19 +26,17 @@ export class HumanSearchBypass {
   private inspectedLinks = new WeakSet<Element>();
 
   private popstateHandler: (() => void) | null = null;
+  private navInterval: number | null = null;
 
   public start(): void {
     if (this.isRunning) return;
     this.isRunning = true;
 
-    const host = window.location.hostname;
-    const isSearchEngine =
-      host.includes('google.') ||
-      host.includes('bing.') ||
-      host.includes('duckduckgo.') ||
-      host.includes('search.brave.com');
-
-    if (!isSearchEngine) return;
+    if (!this.isSearchResultsPage()) {
+      // Keep homepages (google.com) clean and distraction-free. Listen for search navigation.
+      this.listenNavigation();
+      return;
+    }
 
     injectHumanSearchStyles();
     this.ensureButtonInjected();
@@ -75,11 +60,36 @@ export class HumanSearchBypass {
       this.popstateHandler = null;
     }
 
+    if (this.navInterval) {
+      clearInterval(this.navInterval);
+      this.navInterval = null;
+    }
+
     removeHumanSearchUI();
   }
 
+  private isSearchResultsPage(): boolean {
+    const host = window.location.hostname;
+    const isSearchEngine =
+      host.includes('google.') ||
+      host.includes('bing.') ||
+      host.includes('duckduckgo.') ||
+      host.includes('search.brave.com');
+
+    if (!isSearchEngine) return false;
+
+    const url = new URL(window.location.href);
+    return (
+      url.pathname.includes('/search') ||
+      url.pathname.includes('/html') ||
+      url.searchParams.has('q') ||
+      url.searchParams.has('query') ||
+      url.searchParams.has('p')
+    );
+  }
+
   private ensureButtonInjected(): void {
-    if (!this.isRunning) return;
+    if (!this.isRunning || !this.isSearchResultsPage()) return;
     injectHumanSearchButton((isActive) => {
       this.handleToggle(isActive);
     });
@@ -98,11 +108,9 @@ export class HumanSearchBypass {
       q = input.value.trim();
     }
 
-    const forumQuery = '(site:reddit.com OR site:news.ycombinator.com OR site:stackoverflow.com OR site:quora.com)';
-
     if (isActive) {
       if (q && !q.includes('site:reddit.com')) {
-        const combined = `${q} ${forumQuery}`.trim();
+        const combined = `${q} ${FORUM_SEARCH_QUERY}`.trim();
         // If on homepage without /search path, navigate to /search endpoint
         if (!url.pathname.includes('/search') && !url.pathname.includes('/html')) {
           url.pathname = '/search';
@@ -116,7 +124,12 @@ export class HumanSearchBypass {
       }
     } else {
       if (q) {
-        const cleaned = q.replace(forumQuery, '').replace('site:reddit.com', '').trim();
+        const cleaned = q
+          .replace(/\(site:[^)]+\)/gi, '')
+          .replace(FORUM_SEARCH_QUERY, '')
+          .replace(/site:(reddit\.com|news\.ycombinator\.com|stackoverflow\.com|stackexchange\.com|quora\.com|github\.com|medium\.com|dev\.to|lobste\.rs|xda-developers\.com)/gi, '')
+          .replace(/\s+/g, ' ')
+          .trim();
         url.searchParams.set(paramName, cleaned);
         window.location.href = url.toString();
       }
@@ -138,14 +151,7 @@ export class HumanSearchBypass {
         const parsed = new URL(href);
         const host = parsed.hostname.toLowerCase();
 
-        // 1. Is this a human discussion link?
-        const isDiscussion = DISCUSSION_DOMAINS.some((d) => host.includes(d) || href.includes(d));
-        if (isDiscussion) {
-          const card = this.findResultContainer(link);
-          if (card) badgeDiscussionResult(card, host);
-        }
-
-        // 2. Is this a known SEO farm?
+        // Check for known SEO content farm
         const isSeoFarm = SEO_FARM_DOMAINS.some((d) => host.includes(d));
         if (isSeoFarm) {
           const card = this.findResultContainer(link);
@@ -163,12 +169,17 @@ export class HumanSearchBypass {
   }
 
   private findResultContainer(link: HTMLElement): HTMLElement | null {
+    // Exclude header, navigation, top bar, and search form elements
+    if (link.closest('header, nav, #gb, #top_nav, [role="navigation"], form, #searchform')) {
+      return null;
+    }
+
     // Google: div.g, div[data-hveid]
     // Bing: li.b_algo
     // DuckDuckGo: article, div[data-testid="result"]
     // Brave: div.snippet
     const container = link.closest<HTMLElement>(
-      'div.g, li.b_algo, article, div[data-testid="result"], div.snippet, div[jscontroller], div[data-sokoban-container]'
+      'div.g, li.b_algo, article, div[data-testid="result"], div.snippet'
     );
     return container;
   }
@@ -192,11 +203,30 @@ export class HumanSearchBypass {
   }
 
   private listenNavigation(): void {
-    this.popstateHandler = () => {
-      this.ensureButtonInjected();
-      this.scanAndBadgeResults();
+    if (this.popstateHandler) return;
+
+    const handleRoute = () => {
+      if (this.isSearchResultsPage()) {
+        injectHumanSearchStyles();
+        this.ensureButtonInjected();
+        this.scanAndBadgeResults();
+        this.startObserver();
+      } else {
+        removeHumanSearchUI();
+      }
     };
+
+    this.popstateHandler = handleRoute;
     window.addEventListener('popstate', this.popstateHandler);
+
+    let lastUrl = window.location.href;
+    this.navInterval = window.setInterval(() => {
+      if (!this.isRunning) return;
+      if (window.location.href !== lastUrl) {
+        lastUrl = window.location.href;
+        handleRoute();
+      }
+    }, 400);
   }
 }
 
