@@ -1,6 +1,7 @@
 /**
  * Modal & Paywall Smasher — UI Module
- * Injects non-intrusive toast notifications when a locking overlay is automatically smashed.
+ * Injects non-intrusive toast notifications and comprehensive global unblur CSS
+ * so pages are crystal clear and fully interactive after overlays are destroyed.
  */
 
 const STYLE_ID = 'zenweb-overlay-smasher-styles';
@@ -12,6 +13,39 @@ export function injectOverlaySmasherStyles(): void {
   const style = document.createElement('style');
   style.id = STYLE_ID;
   style.textContent = `
+    /* ── Global Unblur & Interactive Recovery System ── */
+    html.zw-smashed,
+    html.zw-smashed body {
+      overflow: auto !important;
+      overflow-y: auto !important;
+      position: static !important;
+      pointer-events: auto !important;
+      user-select: auto !important;
+    }
+
+    /* Force-defeat any class or stylesheet based blur/pointer-events lock on page contents */
+    html.zw-smashed body > *:not([class*="zw-"]):not(#${TOAST_ID}):not(#zw-jump-to-recipe-btn):not(#zw-recipe-reader-modal):not(#zw-recipe-reader-modal *),
+    html.zw-smashed main,
+    html.zw-smashed #root,
+    html.zw-smashed #app,
+    html.zw-smashed #__next,
+    html.zw-smashed [id*="page" i],
+    html.zw-smashed [id*="main" i],
+    html.zw-smashed [id*="wrap" i],
+    html.zw-smashed [class*="page" i],
+    html.zw-smashed [class*="wrap" i],
+    html.zw-smashed [class*="content" i],
+    html.zw-smashed [class*="container" i],
+    html.zw-smashed [class*="blur" i],
+    html.zw-smashed [class*="blurred" i],
+    html.zw-smashed [class*="filter" i] {
+      filter: none !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      pointer-events: auto !important;
+      user-select: auto !important;
+    }
+
     #${TOAST_ID} {
       all: initial;
       position: fixed !important;

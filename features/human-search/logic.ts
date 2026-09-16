@@ -38,6 +38,8 @@ export class HumanSearchBypass {
   private observer: MutationObserver | null = null;
   private inspectedLinks = new WeakSet<Element>();
 
+  private popstateHandler: (() => void) | null = null;
+
   public start(): void {
     if (this.isRunning) return;
     this.isRunning = true;
@@ -52,12 +54,11 @@ export class HumanSearchBypass {
     if (!isSearchEngine) return;
 
     injectHumanSearchStyles();
-    injectHumanSearchButton((isActive) => {
-      this.handleToggle(isActive);
-    });
+    this.ensureButtonInjected();
 
     this.scanAndBadgeResults();
     this.startObserver();
+    this.listenNavigation();
   }
 
   public stop(): void {
@@ -69,26 +70,56 @@ export class HumanSearchBypass {
       this.observer = null;
     }
 
+    if (this.popstateHandler) {
+      window.removeEventListener('popstate', this.popstateHandler);
+      this.popstateHandler = null;
+    }
+
     removeHumanSearchUI();
+  }
+
+  private ensureButtonInjected(): void {
+    if (!this.isRunning) return;
+    injectHumanSearchButton((isActive) => {
+      this.handleToggle(isActive);
+    });
   }
 
   private handleToggle(isActive: boolean): void {
     const url = new URL(window.location.href);
     const paramName = url.searchParams.has('q') ? 'q' : 'query';
-    const q = url.searchParams.get(paramName) || '';
+    let q = url.searchParams.get(paramName) || '';
+
+    // If query not in URL (e.g. on homepage), retrieve live value from search input
+    const input = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+      'textarea[name="q"], input[name="q"], input#searchbox, #searchbox_input, #search_form_input, input[name="p"], input[type="search"]'
+    );
+    if (!q && input && input.value.trim()) {
+      q = input.value.trim();
+    }
 
     const forumQuery = '(site:reddit.com OR site:news.ycombinator.com OR site:stackoverflow.com OR site:quora.com)';
 
     if (isActive) {
-      if (!q.includes('site:reddit.com')) {
-        url.searchParams.set(paramName, `${q} ${forumQuery}`.trim());
+      if (q && !q.includes('site:reddit.com')) {
+        const combined = `${q} ${forumQuery}`.trim();
+        // If on homepage without /search path, navigate to /search endpoint
+        if (!url.pathname.includes('/search') && !url.pathname.includes('/html')) {
+          url.pathname = '/search';
+        }
+        url.searchParams.set(paramName, combined);
         recordProtectionEvent('seoSpamFiltered', 5).catch(() => {});
         window.location.href = url.toString();
+      } else if (!q && input) {
+        // If query field is empty on homepage, focus the input for immediate typing
+        input.focus();
       }
     } else {
-      const cleaned = q.replace(forumQuery, '').replace('site:reddit.com', '').trim();
-      url.searchParams.set(paramName, cleaned);
-      window.location.href = url.toString();
+      if (q) {
+        const cleaned = q.replace(forumQuery, '').replace('site:reddit.com', '').trim();
+        url.searchParams.set(paramName, cleaned);
+        window.location.href = url.toString();
+      }
     }
   }
 
@@ -147,6 +178,7 @@ export class HumanSearchBypass {
 
     let scanTimer: number | null = null;
     this.observer = new MutationObserver(() => {
+      this.ensureButtonInjected();
       if (scanTimer) clearTimeout(scanTimer);
       scanTimer = window.setTimeout(() => {
         this.scanAndBadgeResults();
@@ -157,6 +189,14 @@ export class HumanSearchBypass {
       childList: true,
       subtree: true,
     });
+  }
+
+  private listenNavigation(): void {
+    this.popstateHandler = () => {
+      this.ensureButtonInjected();
+      this.scanAndBadgeResults();
+    };
+    window.addEventListener('popstate', this.popstateHandler);
   }
 }
 

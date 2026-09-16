@@ -18,38 +18,92 @@ export function injectHumanSearchStyles(): void {
       all: initial;
       display: inline-flex !important;
       align-items: center !important;
-      gap: 6px !important;
-      padding: 6px 14px !important;
-      margin: 8px 12px !important;
-      background: rgba(255, 255, 255, 0.94) !important;
-      backdrop-filter: saturate(180%) blur(16px) !important;
-      -webkit-backdrop-filter: saturate(180%) blur(16px) !important;
-      color: #1d1d1f !important;
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif !important;
-      font-size: 12px !important;
-      font-weight: 600 !important;
+      gap: 7px !important;
+      padding: 0 16px !important;
+      height: 38px !important;
+      background: #ffffff !important;
+      color: #202124 !important;
+      font-family: -apple-system, BlinkMacSystemFont, "Google Sans", "SF Pro Text", "Roboto", "Segoe UI", sans-serif !important;
+      font-size: 13px !important;
+      font-weight: 500 !important;
       line-height: 1 !important;
       border-radius: 9999px !important;
-      border: 1px solid rgba(0, 0, 0, 0.14) !important;
-      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+      border: 1px solid #dadce0 !important;
+      box-shadow: 0 1px 6px rgba(32, 33, 36, 0.12) !important;
       cursor: pointer !important;
       user-select: none !important;
-      transition: all 0.18s ease !important;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+      position: absolute !important;
+      left: calc(100% + 12px) !important;
+      top: 50% !important;
+      transform: translateY(-50%) !important;
+      white-space: nowrap !important;
       z-index: 1000 !important;
     }
 
     #${BADGE_ID}:hover {
-      background: #ffffff !important;
-      border-color: rgba(16, 185, 129, 0.45) !important;
-      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.18) !important;
-      transform: translateY(-1px) !important;
+      background: #f8fafd !important;
+      border-color: #10b981 !important;
+      color: #059669 !important;
+      box-shadow: 0 2px 10px rgba(16, 185, 129, 0.22) !important;
+      transform: translateY(calc(-50% - 1px)) !important;
     }
 
     #${BADGE_ID}.zw--active {
       background: #10b981 !important;
       color: #ffffff !important;
       border-color: #10b981 !important;
-      box-shadow: 0 3px 12px rgba(16, 185, 129, 0.35) !important;
+      box-shadow: 0 2px 8px rgba(16, 185, 129, 0.35) !important;
+    }
+
+    #${BADGE_ID}.zw--active:hover {
+      background: #059669 !important;
+      border-color: #059669 !important;
+      color: #ffffff !important;
+      box-shadow: 0 3px 12px rgba(16, 185, 129, 0.45) !important;
+      transform: translateY(calc(-50% - 1px)) !important;
+    }
+
+    /* Dark theme support */
+    @media (prefers-color-scheme: dark) {
+      #${BADGE_ID} {
+        background: #303134 !important;
+        color: #e8eaed !important;
+        border-color: #5f6368 !important;
+        box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4) !important;
+      }
+      #${BADGE_ID}:hover {
+        background: #3c4043 !important;
+        border-color: #34d399 !important;
+        color: #34d399 !important;
+        box-shadow: 0 2px 10px rgba(52, 211, 153, 0.25) !important;
+      }
+    }
+
+    html[data-darkmode="true"] #${BADGE_ID},
+    body[data-darkmode="true"] #${BADGE_ID},
+    .dark-theme #${BADGE_ID} {
+      background: #303134 !important;
+      color: #e8eaed !important;
+      border-color: #5f6368 !important;
+      box-shadow: 0 1px 6px rgba(0, 0, 0, 0.4) !important;
+    }
+
+    /* Responsive fallback for narrow displays */
+    @media (max-width: 960px) {
+      #${BADGE_ID} {
+        position: static !important;
+        transform: none !important;
+        margin: 12px auto 0 !important;
+        display: flex !important;
+        width: fit-content !important;
+      }
+      #${BADGE_ID}:hover {
+        transform: translateY(-1px) !important;
+      }
+      #${BADGE_ID}.zw--active:hover {
+        transform: translateY(-1px) !important;
+      }
     }
 
     /* ── In-Page SERP Badges ── */
@@ -102,30 +156,58 @@ export function injectHumanSearchStyles(): void {
 }
 
 export function injectHumanSearchButton(onToggle: (isActive: boolean) => void): HTMLElement | null {
-  if (document.getElementById(BADGE_ID)) return null;
+  const existing = document.getElementById(BADGE_ID);
+  if (existing) return existing;
 
-  // Search toolbar anchors across Google, Bing, DuckDuckGo, Brave
-  const selectors = [
-    '#top_nav',
-    '#hdtb',
-    '#searchform',
-    '[role="navigation"]',
-    '#rcnt',
-    '.header__search',
-    '#b_header',
-    'header',
-  ];
+  // 1. Locate the active search input/textarea
+  const searchInput = document.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+    'textarea[name="q"], input[name="q"], input#searchbox, #searchbox_input, #search_form_input, input[name="p"], input[type="search"]'
+  );
 
   let target: HTMLElement | null = null;
-  for (const s of selectors) {
-    const el = document.querySelector<HTMLElement>(s);
-    if (el) {
-      target = el;
-      break;
+
+  if (searchInput) {
+    // Priority: Google .A8SBwf (wraps .RNNXgb) or .RNNXgb itself
+    target =
+      searchInput.closest<HTMLElement>('.A8SBwf') ||
+      searchInput.closest<HTMLElement>('.RNNXgb, [jsname="RNNXgb"]') ||
+      searchInput.closest<HTMLElement>('.b_searchboxForm, #sb_form') ||
+      searchInput.closest<HTMLElement>('#search_form, #searchbox_homepage, .header__form, .searchbox') ||
+      searchInput.closest<HTMLElement>('form[role="search"], form#tsf, form');
+  }
+
+  // Fallback: If search input isn't in DOM yet, try known search bar wrappers
+  if (!target) {
+    const fallbackSelectors = [
+      '.A8SBwf',
+      '.RNNXgb',
+      '[jsname="RNNXgb"]',
+      '#sb_form',
+      '#search_form',
+      'form[role="search"]',
+      '#tsf',
+    ];
+    for (const s of fallbackSelectors) {
+      const el = document.querySelector<HTMLElement>(s);
+      if (el) {
+        target = el;
+        break;
+      }
     }
   }
 
   if (!target) return null;
+
+  // Ensure target has relative positioning so the pill anchors directly beside it
+  const computedPos = window.getComputedStyle(target).position;
+  if (computedPos === 'static') {
+    target.style.position = 'relative';
+  }
+
+  // Ensure target does not clip the pill
+  if (window.getComputedStyle(target).overflow === 'hidden') {
+    target.style.overflow = 'visible';
+  }
 
   const btn = document.createElement('button');
   btn.id = BADGE_ID;
@@ -134,6 +216,7 @@ export function injectHumanSearchButton(onToggle: (isActive: boolean) => void): 
 
   const icon = document.createElement('span');
   icon.textContent = '💬';
+  icon.style.fontSize = '14px';
 
   const text = document.createElement('span');
   text.textContent = 'Human Discussions';
@@ -144,18 +227,43 @@ export function injectHumanSearchButton(onToggle: (isActive: boolean) => void): 
   const url = new URL(window.location.href);
   const paramName = url.searchParams.has('q') ? 'q' : 'query';
   const q = url.searchParams.get(paramName) || '';
-  const isCurrentlyActive = q.includes('reddit.com') || q.includes('quora.com') || q.includes('stackoverflow.com');
+  const isCurrentlyActive =
+    q.includes('reddit.com') ||
+    q.includes('quora.com') ||
+    q.includes('stackoverflow.com') ||
+    q.includes('news.ycombinator.com');
   if (isCurrentlyActive) {
     btn.classList.add('zw--active');
   }
 
   btn.addEventListener('click', (e) => {
     e.preventDefault();
+    e.stopPropagation();
     const active = btn.classList.toggle('zw--active');
     onToggle(active);
   });
 
-  target.insertAdjacentElement('afterbegin', btn);
+  // Attach submit listener to search form so typing on homepage with active pill preserves filter
+  const form = searchInput?.closest<HTMLFormElement>('form') || target.closest<HTMLFormElement>('form');
+  if (form && !form.dataset.zwHumanSearchBound) {
+    form.dataset.zwHumanSearchBound = 'true';
+    form.addEventListener('submit', () => {
+      if (btn.classList.contains('zw--active')) {
+        const input = form.querySelector<HTMLInputElement | HTMLTextAreaElement>(
+          'textarea[name="q"], input[name="q"], input[type="search"]'
+        );
+        if (input && input.value.trim()) {
+          const val = input.value.trim();
+          const forumQuery = '(site:reddit.com OR site:news.ycombinator.com OR site:stackoverflow.com OR site:quora.com)';
+          if (!val.includes('site:reddit.com')) {
+            input.value = `${val} ${forumQuery}`;
+          }
+        }
+      }
+    });
+  }
+
+  target.appendChild(btn);
   return btn;
 }
 

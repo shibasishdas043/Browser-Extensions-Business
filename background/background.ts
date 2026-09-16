@@ -111,15 +111,70 @@ async function dispatchToTab(tabId: number, msg: ExtensionMessage): Promise<void
         await chrome.scripting.executeScript({
           target: { tabId },
           func: () => {
-            document.documentElement.style.setProperty('overflow', 'auto', 'important');
-            document.body.style.setProperty('overflow', 'auto', 'important');
-            document.body.style.setProperty('pointer-events', 'auto', 'important');
-            const overlays = document.querySelectorAll(
-              'div[class*="modal"], div[class*="overlay"], div[class*="backdrop"], dialog'
+            const docEl = document.documentElement;
+            const bodyEl = document.body;
+
+            if (docEl) {
+              docEl.classList.add('zw-smashed');
+              docEl.style.setProperty('overflow', 'auto', 'important');
+              docEl.style.setProperty('overflow-y', 'auto', 'important');
+              docEl.style.setProperty('position', 'static', 'important');
+              docEl.style.setProperty('pointer-events', 'auto', 'important');
+            }
+
+            if (bodyEl) {
+              bodyEl.classList.add('zw-smashed');
+              bodyEl.style.setProperty('overflow', 'auto', 'important');
+              bodyEl.style.setProperty('overflow-y', 'auto', 'important');
+              bodyEl.style.setProperty('position', 'static', 'important');
+              bodyEl.style.setProperty('pointer-events', 'auto', 'important');
+              bodyEl.style.setProperty('user-select', 'auto', 'important');
+            }
+
+            const lockRegex = /(modal-open|has-modal|is-modal|dialog-open|popup-open|age-gate|agegate|blurred|blur|is-blurred|filter-blur|no-scroll|noscroll|overflow-hidden|prevent-scroll|lock-scroll|locked)/i;
+            [docEl, bodyEl].forEach((r) => {
+              if (!r) return;
+              Array.from(r.classList).forEach((c) => {
+                if (lockRegex.test(c)) r.classList.remove(c);
+              });
+            });
+
+            const overlays = document.querySelectorAll<HTMLElement>(
+              'dialog, [role="dialog"], [role="alertdialog"], [aria-modal="true"], div[class*="modal" i], div[class*="overlay" i], div[class*="backdrop" i], div[class*="age-gate" i]'
             );
             overlays.forEach((el) => {
               const s = window.getComputedStyle(el);
               if (s.position === 'fixed' || s.position === 'sticky') el.remove();
+            });
+
+            // Eradicate filters and restore pointer-events on page elements
+            document.querySelectorAll<HTMLElement>('*').forEach((el) => {
+              if (el.id?.startsWith('zw-') || (typeof el.className === 'string' && el.className.includes('zw-'))) return;
+
+              if (el.style) {
+                const inlineFilter = el.style.filter || '';
+                const inlineBackdrop = el.style.backdropFilter || (el.style as any).webkitBackdropFilter || '';
+                if (inlineFilter.includes('blur') || inlineFilter.includes('grayscale') || inlineBackdrop.includes('blur')) {
+                  el.style.setProperty('filter', 'none', 'important');
+                  el.style.setProperty('backdrop-filter', 'none', 'important');
+                  el.style.setProperty('-webkit-backdrop-filter', 'none', 'important');
+                }
+                if (el.style.pointerEvents === 'none') {
+                  el.style.setProperty('pointer-events', 'auto', 'important');
+                }
+              }
+
+              try {
+                const computed = window.getComputedStyle(el);
+                if (computed.filter?.includes('blur') || computed.backdropFilter?.includes('blur')) {
+                  el.style.setProperty('filter', 'none', 'important');
+                  el.style.setProperty('backdrop-filter', 'none', 'important');
+                  el.style.setProperty('-webkit-backdrop-filter', 'none', 'important');
+                }
+                if (computed.pointerEvents === 'none' && !/^(svg|path|circle|line|polygon|rect|g)$/i.test(el.tagName)) {
+                  el.style.setProperty('pointer-events', 'auto', 'important');
+                }
+              } catch {}
             });
           },
         });
