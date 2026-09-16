@@ -27,12 +27,14 @@ export class RecipeSkipper {
   private hasDetectedRecipe = false;
   private currentRecipe: ExtractedRecipe | null = null;
   private recipeTarget: HTMLElement | null = null;
+  private keydownListener: ((e: KeyboardEvent) => void) | null = null;
 
   public start(): void {
     if (this.isRunning) return;
     this.isRunning = true;
 
     this.detectAndInit();
+    this.attachShortcutListener();
   }
 
   public stop(): void {
@@ -41,7 +43,30 @@ export class RecipeSkipper {
     this.hasDetectedRecipe = false;
     this.currentRecipe = null;
     this.recipeTarget = null;
+    if (this.keydownListener) {
+      document.removeEventListener('keydown', this.keydownListener, true);
+      this.keydownListener = null;
+    }
     removeRecipeSkipperUI();
+  }
+
+  /**
+   * Listens for Recipe Reader / Jump shortcut:
+   * Windows/Linux: Alt + Shift + J
+   * macOS: Option + Shift + J (Option generates 'Ô' or '∆' on macOS, but e.code is consistently 'KeyJ')
+   */
+  private attachShortcutListener(): void {
+    this.keydownListener = (e: KeyboardEvent) => {
+      const isAltShiftJ = e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey && (
+        e.code === 'KeyJ' || e.key.toLowerCase() === 'j' || e.key === '∆' || e.key === 'Ô' || e.key === 'ô'
+      );
+      if (isAltShiftJ) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.openReaderOrJump();
+      }
+    };
+    document.addEventListener('keydown', this.keydownListener, true);
   }
 
   public openReaderOrJump(): void {

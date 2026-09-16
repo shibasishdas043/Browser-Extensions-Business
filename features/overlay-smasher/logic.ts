@@ -39,17 +39,37 @@ export class OverlaySmasher {
   }
 
   /**
-   * Listens for double-tap Escape key to immediately trigger on-demand smash.
+   * Listens for cross-OS panic triggers:
+   * 1. Double-tap Escape key (Escape / Esc across Windows, macOS, Linux).
+   * 2. Direct hotkey fallback: Alt + Shift + X (Windows/Linux) or Option + Shift + X (macOS).
    */
   private attachShortcutListener(): void {
     this.keydownListener = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
+      // 1. Quick Panic Escape: Double-tap Escape
+      const isEscape = e.key === 'Escape' || e.key === 'Esc' || e.code === 'Escape';
+      if (isEscape && !e.ctrlKey && !e.altKey && !e.metaKey) {
         const now = Date.now();
-        if (now - this.lastEscPress < 450) {
-          // Double-tap Escape detected
+        if (now - this.lastEscPress < 500) {
+          // Double-tap Escape detected across any OS
+          e.preventDefault();
           this.smashNow(true);
         }
         this.lastEscPress = now;
+        return;
+      }
+
+      // 2. Panic Overlay Smash: Alt + Shift + X (Windows/Linux) or Option + Shift + X (macOS)
+      // Note: On macOS, Option modifies key character outputs (Option+Shift+X produces '˛' or '≈'),
+      // but e.code is consistently 'KeyX'.
+      const isAltShiftX = e.altKey && e.shiftKey && !e.ctrlKey && !e.metaKey && (
+        e.code === 'KeyX' || e.key.toLowerCase() === 'x' || e.key === '˛' || e.key === '≈'
+      );
+      const isCmdShiftX = e.metaKey && e.shiftKey && !e.altKey && !e.ctrlKey && e.code === 'KeyX';
+
+      if (isAltShiftX || isCmdShiftX) {
+        e.preventDefault();
+        e.stopPropagation();
+        this.smashNow(true);
       }
     };
     document.addEventListener('keydown', this.keydownListener, true);

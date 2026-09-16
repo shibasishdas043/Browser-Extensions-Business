@@ -6,7 +6,7 @@ import {
   Shield, ShieldCheck, ShieldAlert,
   Clock, Search, PinOff, VideoOff, ChefHat,
   Hammer, AlertTriangle, FileText, Lock,
-  Sparkles, Check, RotateCcw, Sun, Moon,
+  Sparkles, Check, RotateCcw,
   Heart, Coffee, ExternalLink, Archive, Copy, Trash2, X, CheckCircle2,
   Globe, Download, Upload, Command, Plus,
 } from 'lucide-react';
@@ -121,7 +121,6 @@ export function Dashboard() {
   const [settings, setSettings]         = useState<ZenWebSettings>(DEFAULT_SETTINGS);
   const [stats,    setStats]            = useState<ProtectionStats>({ seoSpamFiltered:0, pinterestHidden:0, videosSuppressed:0, recipesSkipped:0, overlaysSmashed:0, fakeDownloadsDefused:0, formsBackedUp:0, totalTimeSavedSeconds:0 });
   const [activeCategory, setActiveCategory] = useState<'all'|'search'|'browsing'|'security'>('all');
-  const [darkMode, setDarkMode]         = useState(false);
   const [toastMsg, setToastMsg]         = useState<string|null>(null);
   const [donationTier, setDonationTier] = useState<number>(5);
   const [vaultOpen, setVaultOpen]       = useState(false);
@@ -130,6 +129,12 @@ export function Dashboard() {
   const [newDomain, setNewDomain]       = useState('');
   const fileInputRef                    = useRef<HTMLInputElement>(null);
   const [, startTransition]             = useTransition();
+  const isMacClient                     = typeof navigator !== 'undefined' && (
+    /Mac/i.test((navigator as any).userAgentData?.platform || '') ||
+    /Mac|iPhone|iPad|iPod/i.test(navigator.platform || '') ||
+    /Macintosh|Mac OS X/i.test(navigator.userAgent || '')
+  );
+  const [shortcutOS, setShortcutOS]     = useState<'mac' | 'win'>(() => (isMacClient ? 'mac' : 'win'));
 
   const handleOpenVault = async () => {
     const drafts = await getAllSavedDrafts();
@@ -225,9 +230,6 @@ export function Dashboard() {
   const rootRef          = useRef<HTMLDivElement>(null);
   const gridRef          = useRef<HTMLDivElement>(null);
   const toastRef         = useRef<HTMLDivElement>(null);
-  // BUG FIX: Lucide icons don't forward refs to SVG elements.
-  // We animate the wrapper <span> instead.
-  const themeIconWrapRef = useRef<HTMLSpanElement>(null);
   const isFilterAnim     = useRef(false);
   // BUG FIX: Safety valve — if animation is still "in progress"
   // after 600ms (e.g. rapid clicks), force-unlock the guard.
@@ -238,13 +240,7 @@ export function Dashboard() {
 
   /* ── load ── */
   useEffect(() => {
-    const saved = localStorage.getItem('zw-theme');
-    const prefersDark = saved === 'dark' ? true : saved === 'light' ? false : window.matchMedia('(prefers-color-scheme: dark)').matches;
-    setDarkMode(prefersDark);
-    // BUG FIX: body background doesn't inherit data-theme from child div,
-    // so overscroll (bounce on macOS / momentum scroll) shows the wrong body bg.
-    // Sync body background directly whenever theme changes.
-    document.body.style.backgroundColor = prefersDark ? '#000000' : '#f5f5f7';
+    document.body.style.backgroundColor = '#000000';
 
     async function load() {
       const [s, st] = await Promise.all([getSettings(), getStats()]);
@@ -384,29 +380,6 @@ export function Dashboard() {
     );
   }, [activeCategory]);
 
-  /* ── THEME TOGGLE ANIMATION ───────────────────────────
-     BUG FIX: Lucide icons don't forward refs to their SVG
-     elements. We animate the wrapper <span> instead.
-  ─────────────────────────────────────────────────────── */
-  const toggleTheme = () => {
-    setDarkMode((prev) => {
-      const next = !prev;
-      localStorage.setItem('zw-theme', next ? 'dark' : 'light');
-      // Sync body background to prevent overscroll flash
-      document.body.style.backgroundColor = next ? '#000000' : '#f5f5f7';
-      return next;
-    });
-    // Animate the wrapper span (Lucide doesn't forward ref to SVG)
-    if (themeIconWrapRef.current) {
-      gsap.fromTo(
-        themeIconWrapRef.current,
-        { rotate: 0, scale: 1 },
-        { rotate: 25, scale: 1.25, duration: 0.16, ease: 'power2.out',
-          yoyo: true, repeat: 1,
-          onComplete: () => gsap.set(themeIconWrapRef.current!, { clearProps: 'all' }) }
-      );
-    }
-  };
 
   /* ── TOAST ANIMATION ──────────────────────────────────
      GSAP timeline so enter/exit are sequenced properly
@@ -488,8 +461,8 @@ export function Dashboard() {
   return (
     <div
       ref={rootRef}
-      data-theme={darkMode ? 'dark' : 'light'}
-      style={{ minHeight: '100vh', backgroundColor: cv('--zw-bg-page'), color: cv('--zw-text-primary'), transition: 'background-color 0.35s ease, color 0.25s ease' }}
+      data-theme="dark"
+      style={{ minHeight: '100vh', backgroundColor: cv('--zw-bg-page'), color: cv('--zw-text-primary') }}
       className="antialiased"
     >
 
@@ -504,7 +477,7 @@ export function Dashboard() {
           <div className="flex items-center gap-3">
             <div
               className="flex items-center justify-center rounded-[10px]"
-              style={{ width: 32, height: 32, backgroundColor: cv('--zw-text-primary'), color: cv('--zw-bg-page'), transition: 'background-color 0.35s, color 0.35s' }}
+              style={{ width: 32, height: 32, backgroundColor: cv('--zw-text-primary'), color: cv('--zw-bg-page') }}
             >
               <Shield style={{ width: 16, height: 16, strokeWidth: 2.2 }} />
             </div>
@@ -536,14 +509,6 @@ export function Dashboard() {
 
             <button onClick={handleResetStats} className="apple-press apple-link" style={{ fontSize: 12 }}>
               Clear Stats
-            </button>
-
-            {/* Theme toggle — BUG FIX: icon wrapped in span so GSAP
-                can animate the wrapper (Lucide icons don't forward refs) */}
-            <button onClick={toggleTheme} className="theme-toggle" aria-label={darkMode ? 'Light mode' : 'Dark mode'}>
-              <span ref={themeIconWrapRef} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                {darkMode ? <Sun style={{ width: 14, height: 14 }} /> : <Moon style={{ width: 14, height: 14 }} />}
-              </span>
             </button>
           </div>
         </div>
@@ -891,9 +856,39 @@ export function Dashboard() {
                 <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: cv('--zw-text-link') }}>
                   Power User
                 </span>
-                <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ color: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.12)' }}>
-                  Hotkeys
-                </span>
+                <div className="flex items-center gap-1.5">
+                  <div className="inline-flex rounded-full p-0.5" style={{ backgroundColor: cv('--zw-bg-scope'), border: `1px solid ${cv('--zw-border-scope')}` }}>
+                    <button
+                      type="button"
+                      onClick={() => setShortcutOS('mac')}
+                      className="px-2 py-0.5 rounded-full text-[11px] font-semibold transition-all cursor-pointer"
+                      style={{
+                        backgroundColor: shortcutOS === 'mac' ? cv('--zw-bg-surface') : 'transparent',
+                        color: shortcutOS === 'mac' ? cv('--zw-text-primary') : cv('--zw-text-secondary'),
+                        boxShadow: shortcutOS === 'mac' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                      }}
+                      title="Display keyboard shortcuts formatted for macOS keyboards"
+                    >
+                      macOS
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setShortcutOS('win')}
+                      className="px-2 py-0.5 rounded-full text-[11px] font-semibold transition-all cursor-pointer"
+                      style={{
+                        backgroundColor: shortcutOS === 'win' ? cv('--zw-bg-surface') : 'transparent',
+                        color: shortcutOS === 'win' ? cv('--zw-text-primary') : cv('--zw-text-secondary'),
+                        boxShadow: shortcutOS === 'win' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                      }}
+                      title="Display keyboard shortcuts formatted for Windows & Linux keyboards"
+                    >
+                      Win / Linux
+                    </button>
+                  </div>
+                  <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ color: '#8b5cf6', backgroundColor: 'rgba(139, 92, 246, 0.12)' }}>
+                    Hotkeys
+                  </span>
+                </div>
               </div>
               <div className="flex items-center gap-3">
                 <div className="flex shrink-0 items-center justify-center rounded-[10px]" style={{ width: 36, height: 36, backgroundColor: cv('--zw-bg-icon'), border: `1px solid ${cv('--zw-border-card')}` }}>
@@ -912,19 +907,19 @@ export function Dashboard() {
               <div className="flex items-center justify-between text-xs">
                 <span style={{ color: cv('--zw-text-secondary') }}>Panic Overlay Smash</span>
                 <kbd className="px-2 py-1 rounded-[6px] font-mono text-[11px] font-semibold" style={{ backgroundColor: cv('--zw-bg-scope'), border: `1px solid ${cv('--zw-border-scope')}`, color: cv('--zw-text-primary') }}>
-                  Alt + Shift + X
+                  {shortcutOS === 'mac' ? '⌥ Option + ⇧ Shift + X' : 'Alt + Shift + X'}
                 </kbd>
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span style={{ color: cv('--zw-text-secondary') }}>Recipe Reader View</span>
                 <kbd className="px-2 py-1 rounded-[6px] font-mono text-[11px] font-semibold" style={{ backgroundColor: cv('--zw-bg-scope'), border: `1px solid ${cv('--zw-border-scope')}`, color: cv('--zw-text-primary') }}>
-                  Alt + Shift + J
+                  {shortcutOS === 'mac' ? '⌥ Option + ⇧ Shift + J' : 'Alt + Shift + J'}
                 </kbd>
               </div>
               <div className="flex items-center justify-between text-xs">
                 <span style={{ color: cv('--zw-text-secondary') }}>Restore Form Drafts</span>
                 <kbd className="px-2 py-1 rounded-[6px] font-mono text-[11px] font-semibold" style={{ backgroundColor: cv('--zw-bg-scope'), border: `1px solid ${cv('--zw-border-scope')}`, color: cv('--zw-text-primary') }}>
-                  Alt + R
+                  {shortcutOS === 'mac' ? '⌥ Option + R' : 'Alt + R'}
                 </kbd>
               </div>
               <div className="flex items-center justify-between text-xs">
@@ -932,6 +927,24 @@ export function Dashboard() {
                 <kbd className="px-2 py-1 rounded-[6px] font-mono text-[11px] font-semibold" style={{ backgroundColor: cv('--zw-bg-scope'), border: `1px solid ${cv('--zw-border-scope')}`, color: cv('--zw-text-primary') }}>
                   Double Esc
                 </kbd>
+              </div>
+              <div className="flex items-center justify-between text-[11px] pt-2" style={{ borderTop: `1px solid ${cv('--zw-border-divider')}`, color: cv('--zw-text-secondary') }}>
+                <span>{shortcutOS === 'mac' ? 'Native Mac Apple layout (⌥ Option)' : 'Native PC layout (Windows & Linux Alt)'}</span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    try {
+                      if (typeof chrome !== 'undefined' && chrome.tabs?.create) {
+                        chrome.tabs.create({ url: 'chrome://extensions/shortcuts' });
+                      }
+                    } catch {}
+                  }}
+                  className="hover:underline flex items-center gap-1 cursor-pointer font-medium"
+                  style={{ color: cv('--zw-text-link') }}
+                  title="Configure custom keys directly in Chrome extensions settings"
+                >
+                  Configure in Chrome ↗
+                </button>
               </div>
             </div>
           </div>

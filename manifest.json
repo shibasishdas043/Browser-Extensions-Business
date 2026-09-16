@@ -29,21 +29,30 @@
     "_execute_action": {
       "suggested_key": {
         "default": "Alt+Shift+Z",
-        "mac": "Alt+Shift+Z"
+        "windows": "Alt+Shift+Z",
+        "mac": "Alt+Shift+Z",
+        "linux": "Alt+Shift+Z",
+        "chromeos": "Alt+Shift+Z"
       },
       "description": "Open ZenWeb Quick Action Popup"
     },
     "smash-overlay": {
       "suggested_key": {
         "default": "Alt+Shift+X",
-        "mac": "Alt+Shift+X"
+        "windows": "Alt+Shift+X",
+        "mac": "Alt+Shift+X",
+        "linux": "Alt+Shift+X",
+        "chromeos": "Alt+Shift+X"
       },
       "description": "Panic Trigger: Smash Overlays & Restore Page Scroll"
     },
     "jump-recipe": {
       "suggested_key": {
         "default": "Alt+Shift+J",
-        "mac": "Alt+Shift+J"
+        "windows": "Alt+Shift+J",
+        "mac": "Alt+Shift+J",
+        "linux": "Alt+Shift+J",
+        "chromeos": "Alt+Shift+J"
       },
       "description": "Quick View: Extract & Jump to Recipe"
     }

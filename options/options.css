@@ -43,52 +43,9 @@
 }
 
 /* ─────────────────────────────────────────
-   Semantic CSS Variables — Light
+   Semantic CSS Variables — Permanent Dark
    ───────────────────────────────────────── */
 :root {
-  color-scheme: light;
-
-  --zw-bg-page:              #f5f5f7;
-  --zw-bg-card:              #ffffff;
-  --zw-bg-nav:               rgba(245, 245, 247, 0.82);
-  --zw-bg-chip:              #e5e5ea;
-  --zw-bg-chip-sel:          #ffffff;
-  --zw-bg-icon:              #f5f5f7;
-  --zw-bg-scope:             #f5f5f7;
-  --zw-bg-master-icon-on:    rgba(52, 199, 89, 0.12);
-  --zw-bg-master-icon-off:   #f5f5f7;
-  --zw-bg-privacy:           rgba(0, 102, 204, 0.08);
-  --zw-bg-status:            #ffffff;
-
-  --zw-border-card:          #e0e0e0;
-  --zw-border-nav:           #d2d2d7;
-  --zw-border-footer:        #d2d2d7;
-  --zw-border-divider:       #f0f0f0;
-  --zw-border-scope:         #e0e0e0;
-  --zw-border-status:        #d2d2d7;
-
-  --zw-text-primary:         #1d1d1f;
-  --zw-text-secondary:       #6e6e73;     /* BUG FIX: was missing, now rgba() for transitionable */
-  --zw-text-tertiary:        #86868b;
-  --zw-text-muted-badge:     #6e6e73;
-  --zw-text-link:            #0066cc;
-  --zw-text-privacy:         #0066cc;
-  --zw-text-badge-privacy:   #0066cc;
-
-  --zw-chip-sel-shadow:      0 1px 3px rgba(0, 0, 0, 0.08);
-
-  --zw-toast-bg:             #1d1d1f;
-  --zw-toast-text:           #ffffff;
-  --zw-toast-border:         rgba(0, 0, 0, 0.08);  /* BUG FIX: was white-on-white in light mode */
-}
-
-/* ─────────────────────────────────────────
-   Semantic CSS Variables — Dark
-   BUG FIX: changed #ebebf5cc hex-alpha to rgba()
-   — hex-alpha cannot be CSS-transitioned and
-     causes confusion in border/box-shadow values.
-   ───────────────────────────────────────── */
-[data-theme="dark"] {
   color-scheme: dark;
 
   --zw-bg-page:              #000000;
@@ -111,9 +68,9 @@
   --zw-border-status:        rgba(255, 255, 255, 0.12);
 
   --zw-text-primary:         #ffffff;
-  --zw-text-secondary:       rgba(235, 235, 245, 0.80); /* BUG FIX: rgba, not hex-alpha */
+  --zw-text-secondary:       rgba(235, 235, 245, 0.80);
   --zw-text-tertiary:        #98989d;
-  --zw-text-muted-badge:     rgba(235, 235, 245, 0.80); /* BUG FIX: rgba, not hex-alpha */
+  --zw-text-muted-badge:     rgba(235, 235, 245, 0.80);
   --zw-text-link:            #2997ff;
   --zw-text-privacy:         #2997ff;
   --zw-text-badge-privacy:   #2997ff;
@@ -122,7 +79,7 @@
 
   --zw-toast-bg:             #2c2c2e;
   --zw-toast-text:           #ffffff;
-  --zw-toast-border:         rgba(255, 255, 255, 0.10); /* visible on dark surface */
+  --zw-toast-border:         rgba(255, 255, 255, 0.10);
 }
 
 /* ─────────────────────────────────────────
@@ -135,24 +92,18 @@ html {
   padding: 0;
   min-height: 100vh;
   scroll-behavior: smooth;
-  /* BUG FIX: was overflow-y:scroll (forces permanent scrollbar on short pages).
-     Use auto so scrollbar only appears when content overflows. */
   overflow-y: auto;
+  background-color: #000000;
+  color-scheme: dark;
 }
 
 body {
   margin: 0;
   padding: 0;
   min-height: 100vh;
-  /* BUG FIX: body bg must follow the root div's data-theme.
-     Body itself has no data-theme, so we set it to the page var
-     which resolves from :root (light). The root div covers 100vh
-     with its own bg, so body colour only shows on overscroll.
-     We fix the overscroll flash by matching it to the dark page bg
-     when [data-theme=dark] is on the child div — use JS in Dashboard
-     to sync body background. Fallback: parchment is safe. */
-  background-color: #f5f5f7;
+  background-color: #000000;
   color: var(--zw-text-primary);
+  color-scheme: dark;
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", "Helvetica Neue", Arial, sans-serif;
   font-size: 17px;
   font-weight: 400;
@@ -248,27 +199,7 @@ body {
 }
 .apple-link:hover { text-decoration: underline; }
 
-/* ─────────────────────────────────────────
-   Dark mode toggle
-   ───────────────────────────────────────── */
-.theme-toggle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 1px solid var(--zw-border-card);
-  background-color: var(--zw-bg-card);
-  color: var(--zw-text-secondary);
-  cursor: pointer;
-  flex-shrink: 0;
-  /* Transition only non-transform properties so GSAP
-     can own the transform axis without conflict */
-  transition: background-color 0.25s ease, border-color 0.25s ease, color 0.2s ease;
-}
-.theme-toggle:hover { color: var(--zw-text-primary); }
-/* :active scale is handled by GSAP in toggleTheme() */
+
 
 /* ─────────────────────────────────────────
    GSAP helpers

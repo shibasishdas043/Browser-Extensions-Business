@@ -270,6 +270,7 @@ class ZenWebPopupUI {
         this.setProtectionState(true, true);
       } else {
         this.toggleHeroMode();
+        this.startHeroCycle();
       }
     });
 
@@ -474,10 +475,13 @@ class ZenWebPopupUI {
   /* ── HERO 3D FLIP CYCLE ──────────────────── */
 
   private startHeroCycle() {
-    if (this.heroTimer) clearInterval(this.heroTimer);
-    this.heroTimer = window.setInterval(() => {
+    if (this.heroTimer) clearTimeout(this.heroTimer);
+    // Increased UI animation delay between the active word and count state (6.8s - 7.2s)
+    const delay = this.heroMode === 'status' ? 6800 : 7200;
+    this.heroTimer = window.setTimeout(() => {
       this.toggleHeroMode();
-    }, 3800);
+      this.startHeroCycle();
+    }, delay);
   }
 
   private toggleHeroMode() {
@@ -500,12 +504,12 @@ class ZenWebPopupUI {
   private animateHeroFlip() {
     if (!this.heroCenterEl) return;
 
-    // Smooth 3D vertical roll flip
+    // Smooth 3D vertical roll flip with refined timing
     gsap.to(this.heroCenterEl, {
       rotationX: 90,
       opacity: 0,
       scale: 0.86,
-      duration: 0.22,
+      duration: 0.26,
       ease: 'power2.in',
       onComplete: () => {
         const activeCount = this.getActiveShieldsCount();
@@ -530,8 +534,9 @@ class ZenWebPopupUI {
             rotationX: 0,
             opacity: 1,
             scale: 1,
-            duration: 0.45,
-            ease: 'back.out(2)',
+            delay: 0.08,
+            duration: 0.52,
+            ease: 'back.out(1.8)',
           }
         );
       },
@@ -627,7 +632,7 @@ class ZenWebPopupUI {
 
       // Stop timers
       if (this.spotTimer) clearInterval(this.spotTimer);
-      if (this.heroTimer) clearInterval(this.heroTimer);
+      if (this.heroTimer) clearTimeout(this.heroTimer);
 
       if (animate) {
         // Wait for the pixel coin flip (0.4s) to complete its animation before transitioning the view

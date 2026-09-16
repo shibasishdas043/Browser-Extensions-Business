@@ -709,16 +709,20 @@ export function showRestorePill(
   // Keyboard shortcut badge
   const kbd = document.createElement('span');
   kbd.className = 'zw-salvage-kbd';
-  const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad|iPod/i.test(navigator.platform);
+  const isMac = typeof navigator !== 'undefined' && (
+    /Mac/i.test((navigator as any).userAgentData?.platform || '') ||
+    /Mac|iPhone|iPad|iPod/i.test(navigator.platform || '') ||
+    /Macintosh|Mac OS X/i.test(navigator.userAgent || '')
+  );
   kbd.textContent = isMac ? '⌥R' : 'Alt+R';
-  kbd.title = 'Press shortcut while field is focused to restore';
+  kbd.title = isMac ? 'Press ⌥R (Option+R) while field is focused to restore' : 'Press Alt+R while field is focused to restore';
 
   // Restore button
   const restoreBtn = document.createElement('button');
   restoreBtn.className = 'zw-salvage-btn-restore';
   restoreBtn.type = 'button';
   restoreBtn.textContent = 'Restore';
-  restoreBtn.title = 'Restore saved text into this field (or press Alt+R)';
+  restoreBtn.title = isMac ? 'Restore saved text into this field (or press ⌥R / Option+R)' : 'Restore saved text into this field (or press Alt+R)';
 
   restoreBtn.addEventListener('click', (e) => {
     e.preventDefault();
@@ -767,7 +771,7 @@ export function showRestorePill(
     countSpan.textContent = `Total: ${countLabel}`;
 
     const hintSpan = document.createElement('span');
-    hintSpan.textContent = 'Click Restore or Alt+R';
+    hintSpan.textContent = isMac ? 'Click Restore or ⌥R' : 'Click Restore or Alt+R';
 
     popMeta.appendChild(countSpan);
     popMeta.appendChild(hintSpan);

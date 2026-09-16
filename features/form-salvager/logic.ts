@@ -114,10 +114,22 @@ export class FormSalvager {
       }
     };
 
-    // Keyboard shortcut: Alt+R / ⌥R for instant hands-free restoration
+    // Keyboard shortcut: Alt+R (Windows/Linux) or ⌥R / Option+R (macOS) for instant hands-free restoration
     this.keydownListener = (e: KeyboardEvent) => {
-      if (e.altKey && (e.key === 'r' || e.key === 'R' || e.code === 'KeyR')) {
-        const active = document.activeElement as HTMLElement | null;
+      // Cross-OS validation:
+      // - Alt / Option must be pressed
+      // - Neither Ctrl nor Meta (Cmd/Win) must be pressed to avoid OS conflicts:
+      //   (prevents collision with AltGr on European keyboards, Cmd+R browser reload on Mac, Win+Alt+R Game Bar on Windows)
+      // - Key matches 'KeyR', 'r', 'R', or '®' (Option+R generates '®' on macOS keyboards)
+      const isAltOnly = e.altKey && !e.ctrlKey && !e.metaKey;
+      const isR = e.code === 'KeyR' || e.key === 'r' || e.key === 'R' || e.key === '®';
+
+      if (isAltOnly && isR) {
+        let active = document.activeElement as HTMLElement | null;
+        if (active && (active as any).shadowRoot && (active as any).shadowRoot.activeElement) {
+          active = (active as any).shadowRoot.activeElement as HTMLElement;
+        }
+
         if (active && this.isSalvagableField(active)) {
           const val = this.getElementValue(active);
           if (val.trim().length <= 2) {
@@ -126,9 +138,9 @@ export class FormSalvager {
               if (draft && draft.value.trim().length >= 5) {
                 e.preventDefault();
                 e.stopPropagation();
-                this.setElementValue(active, draft.value, draft.isContentEditable);
-                flashRestoredGlow(active);
-                dismissRestorePill(active);
+                this.setElementValue(active!, draft.value, draft.isContentEditable);
+                flashRestoredGlow(active!);
+                dismissRestorePill(active!);
                 recordProtectionEvent('formsBackedUp', 1).catch(() => {});
               }
             });
