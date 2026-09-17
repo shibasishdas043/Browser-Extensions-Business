@@ -227,7 +227,36 @@ function getTargetVisualRect(target: HTMLElement): { left: number; top: number; 
 }
 
 /**
+ * Checks whether an element or any of its parent containers is styled with fixed or sticky positioning.
+ */
+function isElementFixedOrSticky(el: HTMLElement): boolean {
+  let curr: HTMLElement | null = el;
+  while (curr && curr !== document.body && curr !== document.documentElement) {
+    try {
+      const pos = window.getComputedStyle(curr).position;
+      if (pos === 'fixed' || pos === 'sticky') {
+        return true;
+      }
+    } catch {
+      break;
+    }
+    curr = curr.parentElement;
+  }
+  return false;
+}
+
+let elementResizeObserver: ResizeObserver | null = null;
+if (typeof ResizeObserver !== 'undefined') {
+  try {
+    elementResizeObserver = new ResizeObserver(() => {
+      updatePillPositions();
+    });
+  } catch {}
+}
+
+/**
  * Updates positions of all active pills so they float directly centered over their target button.
+ * Uses viewport positioning (position: fixed) for sticky/fixed ads, and document positioning for static flow.
  */
 export function updatePillPositions(): void {
   const scrollX = window.scrollX || window.pageXOffset;
@@ -237,24 +266,45 @@ export function updatePillPositions(): void {
     const item = activeQuarantines[i];
     const { target, badge } = item;
 
+    // Check if target is removed from DOM or overridden by user
     if (!document.body.contains(target) || target.getAttribute(OVERRIDE_ATTR) === 'true') {
       badge.remove();
       if (item.originalDisplay !== undefined) {
         target.style.display = item.originalDisplay;
       }
+      elementResizeObserver?.unobserve(target);
       activeQuarantines.splice(i, 1);
       continue;
     }
 
     const vRect = getTargetVisualRect(target);
-    if (vRect.width === 0 && vRect.height === 0) continue;
+    const style = window.getComputedStyle(target);
 
-    // Centered directly on top of the fake button
-    const centerX = vRect.left + scrollX + (vRect.width / 2);
-    const centerY = vRect.top + scrollY + (vRect.height / 2);
+    // If target has zero dimensions or is hidden, hide badge to prevent stranded orphans
+    if (vRect.width === 0 || vRect.height === 0 || style.display === 'none' || style.visibility === 'hidden') {
+      badge.style.display = 'none';
+      continue;
+    } else {
+      badge.style.display = 'inline-flex';
+    }
 
-    badge.style.left = `${centerX}px`;
-    badge.style.top = `${centerY}px`;
+    const isFixed = isElementFixedOrSticky(target);
+
+    if (isFixed) {
+      // Viewport relative coordinates for floating/sticky elements so badge never drifts on scroll
+      badge.style.position = 'fixed';
+      const centerX = vRect.left + (vRect.width / 2);
+      const centerY = vRect.top + (vRect.height / 2);
+      badge.style.left = `${centerX}px`;
+      badge.style.top = `${centerY}px`;
+    } else {
+      // Document relative coordinates for standard flow elements
+      badge.style.position = 'absolute';
+      const centerX = vRect.left + scrollX + (vRect.width / 2);
+      const centerY = vRect.top + scrollY + (vRect.height / 2);
+      badge.style.left = `${centerX}px`;
+      badge.style.top = `${centerY}px`;
+    }
   }
 }
 
@@ -317,6 +367,7 @@ export function quarantineElement(el: HTMLElement, reason: string): void {
     if (originalDisplay !== undefined) {
       el.style.display = originalDisplay;
     }
+    elementResizeObserver?.unobserve(el);
     const idx = activeQuarantines.findIndex((q) => q.target === el);
     if (idx !== -1) activeQuarantines.splice(idx, 1);
   });
@@ -330,6 +381,9 @@ export function quarantineElement(el: HTMLElement, reason: string): void {
   document.body.appendChild(badge);
 
   activeQuarantines.push({ target: el, badge, originalDisplay });
+
+  // Observe target resizing for layout shifts
+  elementResizeObserver?.observe(el);
 
   // If there is an image child still loading, update positions once it finishes loading
   const imgChild = el.querySelector('img');
@@ -355,9 +409,12 @@ export function removeAllQuarantines(): void {
     if (item.originalDisplay !== undefined) {
       item.target.style.display = item.originalDisplay;
     }
+    elementResizeObserver?.unobserve(item.target);
   }
   activeQuarantines.length = 0;
+  elementResizeObserver?.disconnect();
 
   const style = document.getElementById(STYLE_ID);
   if (style) style.remove();
 }
+
