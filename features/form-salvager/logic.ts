@@ -1,23 +1,35 @@
 /**
- * Form Salvager & Crash Guard — Logic Engine 2.0
- * Checkpoints active textareas, inputs, and rich-text editors into persistent sandboxed storage.
- * Multi-revision snapshot history protects against accidental deletions/overwrites.
- * Hands-free Alt+R instant restoration and Form-Level "Restore All" coordination.
+ * Form Salvager & Crash Guard — Universal Logic Engine 3.2
+ * Bulletproof checkpointing and restoration for:
+ * - Radio button groups (DOM-native name group resolution, label fallback, auto-sibling uncheck)
+ * - Dropdown menus (<select>, Select2, Choices.js, split hour/min selectors)
+ * - Date & Time selection modals (jQuery UI Datepicker, Flatpickr, native date/time pickers)
+ * - Checkbox arrays & standalone checkboxes
+ * - Textareas, inputs, and rich-text editors
+ *
+ * SPA Reactivity Support: Invokes native prototype property setters for React, Vue, & Angular.
  * Strictly guarantees privacy: zero capture of passwords, credit cards, CVVs, or sensitive tokens.
  */
 
 import {
-  showRestorePill,
-  dismissRestorePill,
-  removeAllRestorePills,
-  showFormLevelBanner,
-  dismissFormLevelBanner,
   showSiteRestorePrompt,
   dismissSiteRestorePrompt,
   flashRestoredGlow,
-  DraftMeta,
+  removeAllRestorePills,
 } from './ui';
 import { recordProtectionEvent } from '../../content/storage';
+
+export type FieldKind =
+  | 'text'
+  | 'textarea'
+  | 'contenteditable'
+  | 'radio'
+  | 'checkbox'
+  | 'select-one'
+  | 'select-multiple'
+  | 'temporal'
+  | 'range'
+  | 'color';
 
 export interface DraftRevision {
   value: string;
@@ -31,14 +43,26 @@ export interface StoredDraft {
   pageTitle?: string;
   fieldKey: string;
   fieldLabel: string;
+  fieldKind?: FieldKind;
   value: string;
+  checked?: boolean;
+  selectedValues?: string[];
   timestamp: number;
   wordCount: number;
   isContentEditable: boolean;
   revisions: DraftRevision[];
 }
 
-const SENSITIVE_REGEX = /(password|pass|secret|cvv|cvc|ssn|creditcard|cardnumber|card[-_]no|pin|auth|token|otp|security[-_]code)/i;
+interface ExtractedFieldState {
+  kind: FieldKind;
+  value: string;
+  checked?: boolean;
+  selectedValues?: string[];
+  isEmpty: boolean;
+  wordCount: number;
+}
+
+const SENSITIVE_REGEX = /(password|pass(?!port|enger)|secret|cvv|cvc|ssn|creditcard|cardnumber|card[-_]no|pin\b|auth\b|token\b|otp\b|security[-_]code)/i;
 const SENSITIVE_AUTOCOMPLETE_REGEX = /(password|current-password|new-password|cc-|credit-card|cvc|cvv|security-code|one-time-code)/i;
 export const DRAFT_PREFIX = 'zenweb_draft_';
 const TTL_MS = 48 * 60 * 60 * 1000; // 48-hour retention
@@ -100,13 +124,101 @@ export function isSearchEngineSite(urlOrHost: string = typeof window !== 'undefi
   }
 }
 
+/**
+ * Universal field classifier: Maps an element to its canonical FieldKind.
+ */
+export function classifyField(el: HTMLElement): FieldKind | null {
+  if (el.isContentEditable || el.getAttribute('role') === 'textbox') {
+    return 'contenteditable';
+  }
+  if (el instanceof HTMLTextAreaElement) {
+    return 'textarea';
+  }
+  if (el instanceof HTMLSelectElement) {
+    return el.multiple ? 'select-multiple' : 'select-one';
+  }
+  if (el instanceof HTMLInputElement) {
+    const type = (el.type || 'text').toLowerCase();
+    if (type === 'radio') return 'radio';
+    if (type === 'checkbox') return 'checkbox';
+    if (['date', 'time', 'datetime-local', 'month', 'week'].includes(type)) return 'temporal';
+    if (
+      el.classList.contains('hasDatepicker') ||
+      /datepicker|timepicker|datetimepicker/i.test(el.className) ||
+      el.getAttribute('data-provide') === 'datepicker'
+    ) {
+      return 'temporal';
+    }
+    if (type === 'range') return 'range';
+    if (type === 'color') return 'color';
+    if (['text', 'url', 'email', 'tel', 'number', 'search'].includes(type)) return 'text';
+  }
+  return null;
+}
+
+/* ── SPA Reactivity Helpers: Native Prototype Property Setters ── */
+
+function applyNativeInputValue(input: HTMLInputElement | HTMLTextAreaElement, value: string): void {
+  try {
+    const proto = input instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
+    const desc = Object.getOwnPropertyDescriptor(proto, 'value');
+    if (desc && desc.set) {
+      desc.set.call(input, value);
+    } else {
+      input.value = value;
+    }
+  } catch {
+    input.value = value;
+  }
+}
+
+function applyNativeChecked(input: HTMLInputElement, checked: boolean): void {
+  try {
+    const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked');
+    if (desc && desc.set) {
+      desc.set.call(input, checked);
+    } else {
+      input.checked = checked;
+    }
+  } catch {
+    input.checked = checked;
+  }
+}
+
+function applyNativeSelectValue(select: HTMLSelectElement, value: string): void {
+  try {
+    const desc = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+    if (desc && desc.set) {
+      desc.set.call(select, value);
+    } else {
+      select.value = value;
+    }
+  } catch {
+    select.value = value;
+  }
+}
+
+function dispatchChangeEvents(el: HTMLElement): void {
+  try {
+    el.dispatchEvent(new InputEvent('input', { bubbles: true, composed: true }));
+  } catch {
+    el.dispatchEvent(new Event('input', { bubbles: true, composed: true }));
+  }
+  el.dispatchEvent(new Event('change', { bubbles: true, composed: true }));
+}
+
 export class FormSalvager {
   private isRunning = false;
   private inputListener: ((e: Event) => void) | null = null;
+  private changeListener: ((e: Event) => void) | null = null;
+  private clickListener: ((e: MouseEvent) => void) | null = null;
+  private blurListener: ((e: FocusEvent) => void) | null = null;
   private submitListener: ((e: Event) => void) | null = null;
   private keydownListener: ((e: KeyboardEvent) => void) | null = null;
   private observer: MutationObserver | null = null;
   private saveDebounceTimers = new Map<string, number>();
+  private widgetSyncInterval: number | null = null;
+  private lastTrackedValues = new Map<HTMLElement, string>();
 
   public start(): void {
     if (this.isRunning) return;
@@ -124,6 +236,11 @@ export class FormSalvager {
     this.attachListeners();
     this.checkForRecoverableDrafts();
     this.startObserver();
+
+    // Proactive background widget scanner: captures programmatic updates from custom datepickers, Select2, and sliders
+    this.widgetSyncInterval = window.setInterval(() => {
+      this.scanActiveWidgets();
+    }, 1000);
   }
 
   public stop(): void {
@@ -133,6 +250,21 @@ export class FormSalvager {
     if (this.inputListener) {
       document.removeEventListener('input', this.inputListener, true);
       this.inputListener = null;
+    }
+
+    if (this.changeListener) {
+      document.removeEventListener('change', this.changeListener, true);
+      this.changeListener = null;
+    }
+
+    if (this.clickListener) {
+      document.removeEventListener('click', this.clickListener, true);
+      this.clickListener = null;
+    }
+
+    if (this.blurListener) {
+      document.removeEventListener('focusout', this.blurListener, true);
+      this.blurListener = null;
     }
 
     if (this.submitListener) {
@@ -150,25 +282,75 @@ export class FormSalvager {
       this.observer = null;
     }
 
+    if (this.widgetSyncInterval) {
+      clearInterval(this.widgetSyncInterval);
+      this.widgetSyncInterval = null;
+    }
+
     for (const timer of this.saveDebounceTimers.values()) {
       clearTimeout(timer);
     }
     this.saveDebounceTimers.clear();
+    this.lastTrackedValues.clear();
 
     removeAllRestorePills();
   }
 
   /**
-   * Attaches typing listener, form submit listener, and Alt+R shortcut listener.
+   * Attaches typing, selection change, radio click, modal click delegation, blur, form submit, and Alt+R shortcut listeners.
    */
   private attachListeners(): void {
     this.inputListener = (e: Event) => {
       const target = e.target as HTMLElement | null;
       if (!target) return;
-
       if (this.isSalvagableField(target)) {
-        this.handleInput(target);
+        this.handleFieldUpdate(target, 'input');
       }
+    };
+
+    this.changeListener = (e: Event) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (this.isSalvagableField(target)) {
+        this.handleFieldUpdate(target, 'change');
+      }
+    };
+
+    // Click listener handles radio/checkbox clicks and delegates datepicker/Select2 popup item clicks
+    this.clickListener = (e: MouseEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+
+      if (target instanceof HTMLInputElement && (target.type === 'radio' || target.type === 'checkbox')) {
+        if (this.isSalvagableField(target)) {
+          this.handleFieldUpdate(target, 'click');
+        }
+        return;
+      }
+
+      // Detect clicks inside datepicker calendar popups or custom dropdown option lists
+      const isWidgetClick = Boolean(
+        target.closest(
+          '#ui-datepicker-div, .ui-datepicker, .flatpickr-calendar, .datepicker, .pika-single, .vanilla-calendar, [class*="datepicker"], [class*="calendar"], .select2-results__option, .select2-selection, .select2-container, .choices__list, .choices__item, [role="listbox"], [role="option"]'
+        )
+      );
+
+      if (isWidgetClick) {
+        // Allow datepicker or dropdown widget to update DOM property, then scan immediately
+        window.setTimeout(() => {
+          this.scanActiveWidgets();
+        }, 60);
+      }
+    };
+
+    // Focusout captures values when user finishes interacting with a popup or field
+    this.blurListener = (e: FocusEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      if (this.isSalvagableField(target)) {
+        this.handleFieldUpdate(target, 'blur');
+      }
+      this.scanActiveWidgets();
     };
 
     this.submitListener = (e: Event) => {
@@ -181,11 +363,6 @@ export class FormSalvager {
 
     // Keyboard shortcut: Alt+R (Windows/Linux) or ⌥R / Option+R (macOS) for instant hands-free restoration
     this.keydownListener = (e: KeyboardEvent) => {
-      // Cross-OS validation:
-      // - Alt / Option must be pressed
-      // - Neither Ctrl nor Meta (Cmd/Win) must be pressed to avoid OS conflicts:
-      //   (prevents collision with AltGr on European keyboards, Cmd+R browser reload on Mac, Win+Alt+R Game Bar on Windows)
-      // - Key matches 'KeyR', 'r', 'R', or '®' (Option+R generates '®' on macOS keyboards)
       const isAltOnly = e.altKey && !e.ctrlKey && !e.metaKey;
       const isR = e.code === 'KeyR' || e.key === 'r' || e.key === 'R' || e.key === '®';
 
@@ -196,27 +373,56 @@ export class FormSalvager {
         }
 
         if (active && this.isSalvagableField(active)) {
-          const val = this.getElementValue(active);
-          if (val.trim().length <= 2) {
-            const key = this.getElementStorageKey(active);
-            this.getStoredDraft(key).then((draft) => {
-              if (draft && draft.value.trim().length >= 5) {
-                e.preventDefault();
-                e.stopPropagation();
-                this.setElementValue(active!, draft.value, draft.isContentEditable);
-                flashRestoredGlow(active!);
-                dismissRestorePill(active!);
-                recordProtectionEvent('formsBackedUp', 1).catch(() => {});
-              }
-            });
-          }
+          const key = this.getElementStorageKey(active);
+          this.getStoredDraft(key).then((draft) => {
+            if (draft) {
+              e.preventDefault();
+              e.stopPropagation();
+              this.applyFieldState(active!, draft);
+              recordProtectionEvent('formsBackedUp', 1).catch(() => {});
+            }
+          });
         }
       }
     };
 
     document.addEventListener('input', this.inputListener, true);
+    document.addEventListener('change', this.changeListener, true);
+    document.addEventListener('click', this.clickListener, true);
+    document.addEventListener('focusout', this.blurListener, true);
     document.addEventListener('submit', this.submitListener, true);
     document.addEventListener('keydown', this.keydownListener, true);
+  }
+
+  /**
+   * Scans active form widgets (datepickers, Select2 dropdowns, sliders) for programmatic value changes.
+   */
+  private scanActiveWidgets(): void {
+    if (!this.isRunning || isSearchEngineSite()) return;
+
+    const candidates = document.querySelectorAll<HTMLElement>(
+      'input, select, textarea, [contenteditable="true"]'
+    );
+
+    for (const el of Array.from(candidates)) {
+      if (!this.isSalvagableField(el)) continue;
+
+      const state = this.extractFieldState(el);
+      if (!state) continue;
+
+      const currentVal = state.value;
+      const lastVal = this.lastTrackedValues.get(el);
+
+      if (lastVal === undefined) {
+        this.lastTrackedValues.set(el, currentVal);
+        continue;
+      }
+
+      if (currentVal !== lastVal) {
+        this.lastTrackedValues.set(el, currentVal);
+        this.handleFieldUpdate(el, 'widget_sync');
+      }
+    }
   }
 
   /**
@@ -296,33 +502,21 @@ export class FormSalvager {
   }
 
   /**
-   * Evaluates whether an element is an eligible text input while strictly enforcing privacy blacklists.
+   * Evaluates whether an element is an eligible form field while strictly enforcing privacy blacklists.
    */
   public isSalvagableField(el: HTMLElement): boolean {
-    // 0. Search engine sites and search inputs are NEVER salvagable forms
-    if (isSearchEngineSite()) {
-      return false;
-    }
+    if (isSearchEngineSite()) return false;
+    if (this.isSearchField(el)) return false;
 
-    if (this.isSearchField(el)) {
-      return false;
-    }
-
-    if (el instanceof HTMLInputElement) {
-      const type = (el.type || 'text').toLowerCase();
-      const allowedTypes = ['text', 'url', 'email', 'tel'];
-      if (!allowedTypes.includes(type)) return false;
-    } else if (el instanceof HTMLTextAreaElement) {
-      // Allowed
-    } else if (el.isContentEditable || el.getAttribute('role') === 'textbox') {
-      // Modern rich-text editors (Notion, Gmail, Medium, Reddit, etc.)
-    } else {
-      return false;
-    }
+    const kind = classifyField(el);
+    if (!kind) return false;
 
     // Strict Privacy Blacklist
-    if (el instanceof HTMLInputElement && (el.type === 'password' || el.type === 'hidden')) {
-      return false;
+    if (el instanceof HTMLInputElement) {
+      const type = (el.type || 'text').toLowerCase();
+      if (['password', 'hidden', 'submit', 'button', 'reset', 'image', 'file'].includes(type)) {
+        return false;
+      }
     }
 
     const autocomplete = (el.getAttribute('autocomplete') || '').toLowerCase();
@@ -330,7 +524,7 @@ export class FormSalvager {
       return false;
     }
 
-    const identifier = `${el.id} ${el.getAttribute('name') || ''} ${el.getAttribute('placeholder') || ''} ${el.getAttribute('aria-label') || ''} ${el.className}`;
+    const identifier = `${el.id} ${el.getAttribute('name') || ''} ${el.getAttribute('placeholder') || ''} ${el.getAttribute('aria-label') || ''}`;
     if (SENSITIVE_REGEX.test(identifier)) {
       return false;
     }
@@ -343,48 +537,203 @@ export class FormSalvager {
   }
 
   /**
-   * Debounces and saves user text input to persistent local storage with multi-revision tracking.
+   * Safely extracts current value, checked state, or multi-select array from any form element.
+   * Uses DOM-native name collections (document.getElementsByName) to avoid CSS selector escaping bugs.
    */
-  private handleInput(el: HTMLElement): void {
+  public extractFieldState(el: HTMLElement): ExtractedFieldState | null {
+    const kind = classifyField(el);
+    if (!kind) return null;
+
+    switch (kind) {
+      case 'radio': {
+        const radio = el as HTMLInputElement;
+        const groupName = radio.name;
+        if (groupName) {
+          const groupRadios = Array.from(document.getElementsByName(groupName)).filter(
+            (r): r is HTMLInputElement => r instanceof HTMLInputElement && r.type === 'radio'
+          );
+          const checkedRadio = groupRadios.find((r) => r.checked);
+          if (checkedRadio) {
+            return {
+              kind: 'radio',
+              value: checkedRadio.value,
+              checked: true,
+              isEmpty: false,
+              wordCount: 1,
+            };
+          }
+          return {
+            kind: 'radio',
+            value: '',
+            checked: false,
+            isEmpty: true,
+            wordCount: 0,
+          };
+        }
+        return {
+          kind: 'radio',
+          value: radio.value,
+          checked: radio.checked,
+          isEmpty: !radio.checked,
+          wordCount: radio.checked ? 1 : 0,
+        };
+      }
+
+      case 'checkbox': {
+        const cb = el as HTMLInputElement;
+        const groupName = cb.name;
+        if (groupName) {
+          const matching = Array.from(document.getElementsByName(groupName)).filter(
+            (c): c is HTMLInputElement => c instanceof HTMLInputElement && c.type === 'checkbox'
+          );
+          if (matching.length > 1 || groupName.endsWith('[]')) {
+            const checkedCbs = matching.filter((c) => c.checked);
+            const selectedValues = checkedCbs.map((c) => c.value);
+            return {
+              kind: 'checkbox',
+              value: selectedValues.join(', '),
+              selectedValues,
+              isEmpty: selectedValues.length === 0,
+              wordCount: selectedValues.length,
+            };
+          }
+        }
+        return {
+          kind: 'checkbox',
+          value: cb.checked ? (cb.value || 'true') : '',
+          checked: cb.checked,
+          isEmpty: !cb.checked,
+          wordCount: cb.checked ? 1 : 0,
+        };
+      }
+
+      case 'select-one': {
+        const select = el as HTMLSelectElement;
+        const val = select.value;
+        const selectedOpt = select.options[select.selectedIndex];
+        const selectedText = selectedOpt?.text?.trim() || '';
+
+        // An option is a placeholder only if value is blank or text explicitly matches placeholder keywords
+        const isPlaceholder =
+          !val ||
+          (select.selectedIndex <= 0 &&
+            /^(select|choose|--|please\s+select)/i.test(selectedText));
+
+        return {
+          kind: 'select-one',
+          value: val || selectedText,
+          isEmpty: isPlaceholder,
+          wordCount: isPlaceholder ? 0 : 1,
+        };
+      }
+
+      case 'select-multiple': {
+        const select = el as HTMLSelectElement;
+        const selected = Array.from(select.selectedOptions)
+          .map((o) => o.value || o.text.trim())
+          .filter(Boolean);
+        return {
+          kind: 'select-multiple',
+          value: selected.join(', '),
+          selectedValues: selected,
+          isEmpty: selected.length === 0,
+          wordCount: selected.length,
+        };
+      }
+
+      case 'temporal':
+      case 'range':
+      case 'color': {
+        const input = el as HTMLInputElement;
+        const val = (input.value || '').trim();
+        return {
+          kind,
+          value: val,
+          isEmpty: val.length === 0,
+          wordCount: val.length > 0 ? 1 : 0,
+        };
+      }
+
+      case 'contenteditable': {
+        const text = (el.innerText || el.textContent || '').trim();
+        const words = text ? text.split(/\s+/).filter(Boolean).length : 0;
+        return {
+          kind: 'contenteditable',
+          value: text,
+          isEmpty: text.length === 0,
+          wordCount: words,
+        };
+      }
+
+      case 'textarea':
+      case 'text':
+      default: {
+        const val = ((el as HTMLInputElement | HTMLTextAreaElement).value || '').trim();
+        const words = val ? val.split(/\s+/).filter(Boolean).length : 0;
+        return {
+          kind: kind || 'text',
+          value: val,
+          isEmpty: val.length === 0,
+          wordCount: words,
+        };
+      }
+    }
+  }
+
+  /**
+   * Two-tier debounced state checkpointing:
+   * - Selection controls (radio, checkbox, select, date/time): 25ms debounce.
+   * - Text typing (textarea, text, contenteditable): 350ms debounce.
+   */
+  private handleFieldUpdate(el: HTMLElement, _eventType: string): void {
     if (isSearchEngineSite() || this.isSearchField(el)) return;
 
-    const val = this.getElementValue(el);
-    const key = this.getElementStorageKey(el);
+    const state = this.extractFieldState(el);
+    if (!state) return;
 
-    dismissRestorePill(el);
+    const key = this.getElementStorageKey(el);
 
     const existingTimer = this.saveDebounceTimers.get(key);
     if (existingTimer) clearTimeout(existingTimer);
 
-    if (val.trim().length < 5) {
-      if (val.trim().length === 0) {
-        this.removeStoredDraft(key);
-      }
+    if (state.isEmpty) {
+      this.removeStoredDraft(key);
       return;
     }
 
+    // For free-text typing, require at least 3 characters before saving
+    if ((state.kind === 'text' || state.kind === 'textarea' || state.kind === 'contenteditable') && state.value.length < 3) {
+      return;
+    }
+
+    // Adaptive debounce duration based on control type
+    const isSelection =
+      state.kind === 'radio' ||
+      state.kind === 'checkbox' ||
+      state.kind === 'select-one' ||
+      state.kind === 'select-multiple' ||
+      state.kind === 'color' ||
+      state.kind === 'temporal';
+    const debounceMs = isSelection ? 25 : 350;
+
     const timer = window.setTimeout(async () => {
-      const words = val.trim().split(/\s+/).filter(Boolean).length;
       const now = Date.now();
       const label = this.getElementHumanLabel(el);
 
-      // Load existing draft to maintain sliding revisions
       const existing = await this.getStoredDraft(key);
       let revisions: DraftRevision[] = existing?.revisions ? [...existing.revisions] : [];
 
-      if (existing && existing.value && existing.value !== val) {
-        // Add previous value as a historical revision if not already present
+      if (existing && existing.value && existing.value !== state.value) {
         const lastRev = revisions[revisions.length - 1];
-        if (!lastRev || Math.abs(lastRev.value.length - existing.value.length) > 5) {
+        if (!lastRev || Math.abs(lastRev.value.length - existing.value.length) > 2) {
           revisions.push({
             value: existing.value,
             timestamp: existing.timestamp || now - 5000,
-            wordCount: existing.wordCount || existing.value.split(/\s+/).filter(Boolean).length,
+            wordCount: existing.wordCount || 1,
           });
         }
       }
 
-      // Limit to 3 most recent revisions
       if (revisions.length > 3) {
         revisions = revisions.slice(revisions.length - 3);
       }
@@ -397,177 +746,394 @@ export class FormSalvager {
         pageTitle,
         fieldKey: key,
         fieldLabel: label,
-        value: val,
+        fieldKind: state.kind,
+        value: state.value,
+        checked: state.checked,
+        selectedValues: state.selectedValues,
         timestamp: now,
-        wordCount: words,
+        wordCount: state.wordCount,
         isContentEditable: el.isContentEditable,
         revisions,
       };
 
       await this.saveStoredDraft(key, draft);
       this.saveDebounceTimers.delete(key);
-    }, 1000);
+    }, debounceMs);
 
     this.saveDebounceTimers.set(key, timer);
   }
 
   /**
-   * Checks the document for empty fields that have saved recoverable drafts in storage.
-   * Coordinates form-level "Restore All" banners and floating site-level reload prompts.
+   * Applies a stored draft back to any element or group, dispatching synthetic events,
+   * setting prototype properties for React/Vue/Angular, and synchronizing Select2 wrappers.
+   */
+  public applyFieldState(el: HTMLElement, draft: StoredDraft): void {
+    const kind = draft.fieldKind || classifyField(el) || 'text';
+
+    switch (kind) {
+      case 'radio': {
+        const radio = el as HTMLInputElement;
+        const groupName = radio.name;
+        const radios = groupName
+          ? Array.from(document.getElementsByName(groupName)).filter(
+              (r): r is HTMLInputElement => r instanceof HTMLInputElement && r.type === 'radio'
+            )
+          : [radio];
+
+        // 1. Match by value attribute
+        let targetRadio = radios.find(
+          (r) => r.value === draft.value || r.value.toLowerCase() === draft.value.toLowerCase()
+        );
+
+        // 2. Fallback: match by label text (for cases where value is an autogenerated index or 'on')
+        if (!targetRadio) {
+          targetRadio = radios.find((r) => {
+            const label = r.id ? document.querySelector(`label[for="${r.id}"]`) : r.closest('label');
+            const text = label?.textContent?.trim() || '';
+            return text.toLowerCase() === draft.value.toLowerCase();
+          });
+        }
+
+        if (targetRadio) {
+          // Uncheck siblings first
+          radios.forEach((r) => {
+            if (r !== targetRadio) {
+              applyNativeChecked(r, false);
+              r.checked = false;
+            }
+          });
+
+          // Check target radio
+          applyNativeChecked(targetRadio, true);
+          targetRadio.checked = true;
+
+          // Dispatch events
+          try {
+            targetRadio.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
+          } catch {}
+          dispatchChangeEvents(targetRadio);
+          flashRestoredGlow(targetRadio);
+        }
+        break;
+      }
+
+      case 'checkbox': {
+        const cb = el as HTMLInputElement;
+        const groupName = cb.name;
+
+        if (draft.selectedValues && draft.selectedValues.length > 0 && groupName) {
+          const checkboxes = Array.from(document.getElementsByName(groupName)).filter(
+            (c): c is HTMLInputElement => c instanceof HTMLInputElement && c.type === 'checkbox'
+          );
+
+          checkboxes.forEach((item) => {
+            const label = item.id ? document.querySelector(`label[for="${item.id}"]`) : item.closest('label');
+            const labelText = label?.textContent?.trim() || '';
+            const shouldCheck =
+              draft.selectedValues!.includes(item.value) ||
+              draft.selectedValues!.includes(labelText);
+
+            applyNativeChecked(item, shouldCheck);
+            item.checked = shouldCheck;
+            dispatchChangeEvents(item);
+            if (shouldCheck) flashRestoredGlow(item);
+          });
+          return;
+        }
+
+        const shouldCheck = draft.checked !== undefined ? draft.checked : Boolean(draft.value);
+        applyNativeChecked(cb, shouldCheck);
+        cb.checked = shouldCheck;
+        dispatchChangeEvents(cb);
+        if (shouldCheck) flashRestoredGlow(cb);
+        break;
+      }
+
+      case 'select-one': {
+        const select = el as HTMLSelectElement;
+        let matchedIndex = -1;
+
+        // Find option matching draft.value by value or text
+        for (let i = 0; i < select.options.length; i++) {
+          const opt = select.options[i];
+          if (
+            opt.value === draft.value ||
+            opt.text.trim() === draft.value ||
+            opt.value.toLowerCase() === draft.value.toLowerCase() ||
+            opt.text.trim().toLowerCase() === draft.value.toLowerCase()
+          ) {
+            matchedIndex = i;
+            break;
+          }
+        }
+
+        if (matchedIndex !== -1) {
+          for (let i = 0; i < select.options.length; i++) {
+            select.options[i].selected = i === matchedIndex;
+          }
+          select.selectedIndex = matchedIndex;
+          applyNativeSelectValue(select, select.options[matchedIndex].value);
+          select.value = select.options[matchedIndex].value;
+
+          dispatchChangeEvents(select);
+
+          // Synchronize Select2 visible container if wrapped
+          const selectedText = select.options[matchedIndex].text;
+          const container =
+            (select.nextElementSibling?.classList.contains('select2') ? select.nextElementSibling : null) ||
+            select.parentElement?.querySelector('.select2-container') ||
+            document.querySelector(`[aria-labelledby*="${select.id}"]`);
+
+          const renderedSpan =
+            container?.querySelector('.select2-selection__rendered') ||
+            document.getElementById(`select2-${select.id}-container`);
+
+          if (renderedSpan) {
+            renderedSpan.textContent = selectedText;
+            renderedSpan.setAttribute('title', selectedText);
+          }
+
+          flashRestoredGlow(select);
+          if (container instanceof HTMLElement) {
+            flashRestoredGlow(container);
+          }
+        }
+        break;
+      }
+
+      case 'select-multiple': {
+        const select = el as HTMLSelectElement;
+        const targetVals = draft.selectedValues || draft.value.split(',').map((s) => s.trim());
+        for (let i = 0; i < select.options.length; i++) {
+          const opt = select.options[i];
+          opt.selected = targetVals.includes(opt.value) || targetVals.includes(opt.text.trim());
+        }
+        dispatchChangeEvents(select);
+        flashRestoredGlow(select);
+        break;
+      }
+
+      case 'temporal': {
+        const input = el as HTMLInputElement;
+        applyNativeInputValue(input, draft.value);
+        input.value = draft.value;
+        dispatchChangeEvents(input);
+        flashRestoredGlow(input);
+        break;
+      }
+
+      case 'contenteditable': {
+        el.innerText = draft.value;
+        dispatchChangeEvents(el);
+        flashRestoredGlow(el);
+        break;
+      }
+
+      case 'range':
+      case 'color':
+      case 'textarea':
+      case 'text':
+      default: {
+        applyNativeInputValue(el as HTMLInputElement | HTMLTextAreaElement, draft.value);
+        dispatchChangeEvents(el);
+        flashRestoredGlow(el);
+        break;
+      }
+    }
+  }
+
+  /**
+   * Checks the document for fields that have unapplied saved drafts in storage.
+   * Correctly compares current DOM state vs draft state (handles default dropdown values like '00').
+   * Displays the SINGLE floating corner restore prompt offering to reload all saved data.
    */
   public async checkForRecoverableDrafts(): Promise<void> {
     if (isSearchEngineSite()) {
-      removeAllRestorePills();
+      dismissSiteRestorePrompt();
       return;
     }
 
     const candidates = document.querySelectorAll<HTMLElement>(
-      'textarea, input, [contenteditable="true"], [role="textbox"]'
+      'textarea, input, select, [contenteditable="true"], [role="textbox"]'
     );
 
-    const formRecoverableMap = new Map<HTMLFormElement, Array<{ el: HTMLElement; draft: StoredDraft; key: string }>>();
-    const standaloneRecoverable: Array<{ el: HTMLElement; draft: StoredDraft; key: string }> = [];
     const allRecoverable: Array<{ el: HTMLElement; draft: StoredDraft; key: string }> = [];
+    const processedKeys = new Set<string>();
 
     for (const el of Array.from(candidates)) {
       if (!this.isSalvagableField(el)) continue;
 
-      const currentVal = this.getElementValue(el);
-      if (currentVal.trim().length > 2) continue;
-
       const key = this.getElementStorageKey(el);
+      if (processedKeys.has(key)) continue;
+
       const draft = await this.getStoredDraft(key);
+      if (!draft) continue;
 
-      if (draft && draft.value.trim().length >= 5) {
-        const item = { el, draft, key };
-        allRecoverable.push(item);
+      const kind = draft.fieldKind || classifyField(el);
+      let isRecoverable = false;
 
-        const form = el.closest('form');
-        if (form) {
-          const list = formRecoverableMap.get(form) || [];
-          list.push(item);
-          formRecoverableMap.set(form, list);
-        } else {
-          standaloneRecoverable.push(item);
+      switch (kind) {
+        case 'radio': {
+          const radio = el as HTMLInputElement;
+          const groupRadios = radio.name
+            ? Array.from(document.getElementsByName(radio.name)).filter(
+                (r): r is HTMLInputElement => r instanceof HTMLInputElement && r.type === 'radio'
+              )
+            : [radio];
+
+          const checkedRadio = groupRadios.find((r) => r.checked);
+          const currentVal = checkedRadio ? checkedRadio.value : '';
+
+          // If none is checked, or currently checked radio does not match draft value
+          if (!checkedRadio || (currentVal !== draft.value && currentVal.toLowerCase() !== draft.value.toLowerCase())) {
+            isRecoverable = Boolean(draft.value);
+          }
+          break;
+        }
+
+        case 'checkbox': {
+          const cb = el as HTMLInputElement;
+          if (draft.selectedValues && draft.selectedValues.length > 0) {
+            const groupCbs = cb.name
+              ? Array.from(document.getElementsByName(cb.name)).filter(
+                  (c): c is HTMLInputElement => c instanceof HTMLInputElement && c.type === 'checkbox'
+                )
+              : [cb];
+            const currentCheckedVals = groupCbs.filter((c) => c.checked).map((c) => c.value);
+            const isSame =
+              currentCheckedVals.length === draft.selectedValues.length &&
+              currentCheckedVals.every((v) => draft.selectedValues!.includes(v));
+            if (!isSame) {
+              isRecoverable = true;
+            }
+          } else {
+            if (cb.checked !== Boolean(draft.checked)) {
+              isRecoverable = Boolean(draft.checked);
+            }
+          }
+          break;
+        }
+
+        case 'select-one': {
+          const select = el as HTMLSelectElement;
+          const currentVal = select.value;
+          const currentText = select.options[select.selectedIndex]?.text?.trim() || '';
+
+          const matchesDraft =
+            currentVal === draft.value ||
+            currentText === draft.value ||
+            currentVal.toLowerCase() === draft.value.toLowerCase();
+
+          // Recoverable if current selection does not match draft
+          if (!matchesDraft && draft.value) {
+            isRecoverable = true;
+          }
+          break;
+        }
+
+        case 'select-multiple': {
+          const select = el as HTMLSelectElement;
+          const currentVals = Array.from(select.selectedOptions).map((o) => o.value);
+          const targetVals = draft.selectedValues || draft.value.split(',').map((s) => s.trim());
+          const isSame =
+            currentVals.length === targetVals.length &&
+            currentVals.every((v) => targetVals.includes(v));
+          if (!isSame && targetVals.length > 0) {
+            isRecoverable = true;
+          }
+          break;
+        }
+
+        case 'temporal': {
+          const input = el as HTMLInputElement;
+          const currentVal = (input.value || '').trim();
+          if (currentVal !== draft.value && draft.value.length > 0) {
+            isRecoverable = true;
+          }
+          break;
+        }
+
+        case 'range':
+        case 'color': {
+          const input = el as HTMLInputElement;
+          const currentVal = (input.value || '').trim();
+          if (currentVal !== draft.value && draft.value.length > 0) {
+            isRecoverable = true;
+          }
+          break;
+        }
+
+        case 'contenteditable': {
+          const currentVal = (el.innerText || el.textContent || '').trim();
+          if (currentVal.length <= 2 && draft.value.trim().length >= 3) {
+            isRecoverable = true;
+          }
+          break;
+        }
+
+        case 'textarea':
+        case 'text':
+        default: {
+          const currentVal = ((el as HTMLInputElement | HTMLTextAreaElement).value || '').trim();
+          if (currentVal.length <= 2 && draft.value.trim().length >= 3) {
+            isRecoverable = true;
+          }
+          break;
         }
       }
-    }
 
-    // 1. Form-Level Coordinated Restore Banner (Prevents overlapping badges in multi-field forms)
-    for (const [form, items] of formRecoverableMap.entries()) {
-      if (items.length >= 2) {
-        showFormLevelBanner(
-          form,
-          items.length,
-          () => {
-            items.forEach(({ el, draft }) => {
-              this.setElementValue(el, draft.value, draft.isContentEditable);
-              flashRestoredGlow(el);
-              dismissRestorePill(el);
-            });
-            recordProtectionEvent('formsBackedUp', items.length).catch(() => {});
-          },
-          () => {
-            items.forEach(({ el, draft }) => {
-              this.removeStoredDraft(draft.fieldKey);
-              dismissRestorePill(el);
-            });
-          }
-        );
-      } else if (items.length === 1) {
-        this.renderFieldPill(items[0].el, items[0].draft, items[0].key);
+      if (isRecoverable) {
+        processedKeys.add(key);
+        allRecoverable.push({ el, draft, key });
       }
     }
 
-    // 2. Standalone fields outside forms get discreet nested pills
-    for (const { el, draft, key } of standaloneRecoverable) {
-      this.renderFieldPill(el, draft, key);
-    }
-
-    // 3. Site-Level Floating Restore Prompt in the corner
     if (allRecoverable.length > 0) {
       const { siteUrl } = this.getCurrentUrls();
-      const totalWords = allRecoverable.reduce((sum, item) => sum + (item.draft.wordCount || 0), 0);
+      const totalWords = allRecoverable.reduce((sum, item) => sum + (item.draft.wordCount || 1), 0);
       const latestTimestamp = Math.max(...allRecoverable.map((item) => item.draft.timestamp || 0));
-      const longestItem = [...allRecoverable].sort(
-        (a, b) => (b.draft.value?.length || 0) - (a.draft.value?.length || 0)
-      )[0];
-      const longestSnippet = longestItem?.draft?.value
-        ? longestItem.draft.value.replace(/\s+/g, ' ').trim().slice(0, 75) +
-          (longestItem.draft.value.length > 75 ? '...' : '')
-        : undefined;
 
       showSiteRestorePrompt({
         fieldCount: allRecoverable.length,
         wordCount: totalWords,
         timeAgo: this.formatTimeAgo(latestTimestamp),
-        snippet: longestSnippet,
         siteUrl,
         onReload: () => {
           allRecoverable.forEach(({ el, draft }) => {
-            this.setElementValue(el, draft.value, draft.isContentEditable);
-            flashRestoredGlow(el);
-            dismissRestorePill(el);
+            this.applyFieldState(el, draft);
           });
           recordProtectionEvent('formsBackedUp', allRecoverable.length).catch(() => {});
         },
         onDiscard: () => {
-          allRecoverable.forEach(({ el, draft }) => {
+          allRecoverable.forEach(({ draft }) => {
             this.removeStoredDraft(draft.fieldKey);
-            dismissRestorePill(el);
           });
-          dismissFormLevelBanner(document.querySelector('form') as HTMLFormElement);
         },
       });
+    } else {
+      dismissSiteRestorePrompt();
     }
-  }
-
-  /**
-   * Renders a discreet restore pill nested inside a specific field.
-   */
-  private renderFieldPill(el: HTMLElement, draft: StoredDraft, key: string): void {
-    const cleanSnippet = draft.value.replace(/\s+/g, ' ').trim();
-    const snippet = cleanSnippet.length > 75 ? `${cleanSnippet.slice(0, 72)}...` : cleanSnippet;
-
-    const meta: DraftMeta = {
-      wordCount: draft.wordCount,
-      timeAgo: this.formatTimeAgo(draft.timestamp),
-      snippet,
-      revisionsCount: (draft.revisions?.length || 0) + 1,
-    };
-
-    showRestorePill(
-      el,
-      meta,
-      () => {
-        this.setElementValue(el, draft.value, draft.isContentEditable);
-        flashRestoredGlow(el);
-        recordProtectionEvent('formsBackedUp', 1).catch(() => {});
-      },
-      () => {
-        this.removeStoredDraft(key);
-      }
-    );
   }
 
   /**
    * Cleans up all saved drafts associated with a successfully submitted form.
    */
   private async handleFormSubmitted(form: HTMLFormElement): Promise<void> {
-    dismissFormLevelBanner(form);
     const fields = form.querySelectorAll<HTMLElement>(
-      'textarea, input, [contenteditable="true"], [role="textbox"]'
+      'textarea, input, select, [contenteditable="true"], [role="textbox"]'
     );
 
+    const clearedKeys = new Set<string>();
     for (const field of Array.from(fields)) {
       if (this.isSalvagableField(field)) {
         const key = this.getElementStorageKey(field);
-        await this.removeStoredDraft(key);
-        dismissRestorePill(field);
+        if (!clearedKeys.has(key)) {
+          clearedKeys.add(key);
+          await this.removeStoredDraft(key);
+        }
       }
     }
 
-    // Dismiss floating prompt if no unsubmitted drafts remain
     dismissSiteRestorePrompt();
   }
 
@@ -596,7 +1162,7 @@ export class FormSalvager {
   }
 
   /**
-   * Generates a deterministic, collision-free storage key for a given input element.
+   * Generates a deterministic, collision-free storage key for a given input element or input group.
    */
   public getElementStorageKey(el: HTMLElement): string {
     const { fullUrl } = this.getCurrentUrls();
@@ -605,6 +1171,23 @@ export class FormSalvager {
     let formId = 'no-form';
     if (form) {
       formId = form.id || form.getAttribute('name') || `idx_${Array.from(document.forms).indexOf(form)}`;
+    }
+
+    const kind = classifyField(el);
+
+    // Grouped radio buttons: key by group name so clicking any option updates the single canonical group draft
+    if (kind === 'radio' && (el as HTMLInputElement).name) {
+      const radioName = (el as HTMLInputElement).name;
+      return `${DRAFT_PREFIX}${fullUrl}::form[${formId}]::radio_group[name="${radioName}"]`;
+    }
+
+    // Checkbox group / array (e.g. name="vfb-20[]" or multiple checkboxes with identical name)
+    if (kind === 'checkbox' && (el as HTMLInputElement).name) {
+      const cbName = (el as HTMLInputElement).name;
+      const sameNameCount = document.getElementsByName(cbName).length;
+      if (cbName.endsWith('[]') || sameNameCount > 1) {
+        return `${DRAFT_PREFIX}${fullUrl}::form[${formId}]::checkbox_group[name="${cbName}"]`;
+      }
     }
 
     const id = el.id ? `#${el.id}` : '';
@@ -624,12 +1207,25 @@ export class FormSalvager {
 
   /**
    * Derives human-friendly label for display in vault / preview.
+   * Walks up to parent form-group or item container for radio/checkbox groups.
    */
   private getElementHumanLabel(el: HTMLElement): string {
     const labelEl = el.id ? document.querySelector(`label[for="${el.id}"]`) : el.closest('label');
     if (labelEl && labelEl.textContent) {
-      return labelEl.textContent.trim().slice(0, 30);
+      const text = labelEl.textContent.trim().replace(/\s*\*\s*$/, '');
+      if (text) return text.slice(0, 30);
     }
+
+    // Check parent field container (e.g. vfb-item, form-group, fieldset)
+    const container = el.closest('.vfb-item, .form-group, fieldset, .field, li, tr');
+    if (container) {
+      const groupLabel = container.querySelector('label.vfb-desc, label.control-label, legend, .form-label, label');
+      if (groupLabel && groupLabel.textContent) {
+        const text = groupLabel.textContent.trim().replace(/\s*\*\s*$/, '');
+        if (text) return text.slice(0, 30);
+      }
+    }
+
     const placeholder = el.getAttribute('placeholder');
     if (placeholder) return placeholder.slice(0, 30);
     const name = el.getAttribute('name') || el.id;
@@ -638,28 +1234,22 @@ export class FormSalvager {
   }
 
   private getElementValue(el: HTMLElement): string {
-    if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-      return el.value || '';
-    }
-    if (el.isContentEditable || el.getAttribute('role') === 'textbox') {
-      return el.innerText || el.textContent || '';
-    }
-    return '';
+    const state = this.extractFieldState(el);
+    return state ? state.value : '';
   }
 
   private setElementValue(el: HTMLElement, val: string, isContentEditable: boolean): void {
-    if (isContentEditable) {
-      el.innerText = val;
-    } else if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
-      el.value = val;
-    }
-
-    el.dispatchEvent(new Event('input', { bubbles: true }));
-    el.dispatchEvent(new Event('change', { bubbles: true }));
-
-    try {
-      el.focus();
-    } catch {}
+    const draft: StoredDraft = {
+      url: window.location.href,
+      fieldKey: '',
+      fieldLabel: '',
+      value: val,
+      timestamp: Date.now(),
+      wordCount: val.split(/\s+/).filter(Boolean).length,
+      isContentEditable,
+      revisions: [],
+    };
+    this.applyFieldState(el, draft);
   }
 
   /* ── Storage Primitives ── */
@@ -816,8 +1406,8 @@ export class FormSalvager {
         for (const node of Array.from(m.addedNodes)) {
           if (node instanceof HTMLElement) {
             if (
-              node.matches('textarea, input, [contenteditable="true"], [role="textbox"]') ||
-              node.querySelector('textarea, input, [contenteditable="true"], [role="textbox"]')
+              node.matches('textarea, input, select, [contenteditable="true"], [role="textbox"]') ||
+              node.querySelector('textarea, input, select, [contenteditable="true"], [role="textbox"]')
             ) {
               hasAddedInputs = true;
               break;
@@ -831,6 +1421,7 @@ export class FormSalvager {
         if (debounceScan) clearTimeout(debounceScan);
         debounceScan = window.setTimeout(() => {
           this.checkForRecoverableDrafts();
+          this.scanActiveWidgets();
         }, 400);
       }
     });
@@ -892,5 +1483,3 @@ export async function deleteSavedDraft(key: string): Promise<void> {
     localStorage.removeItem(key);
   } catch {}
 }
-
-
