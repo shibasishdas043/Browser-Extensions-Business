@@ -85,8 +85,8 @@ class ZenWebPopupUI {
   private spotIdx      = 0;
   private isOn         = true;
   private heroMode: 'count' | 'status' = 'count';
-  private totalBlocked = 74;
-  private statVals     = [12, 4, 14, 28, 5, 3, 8];
+  private totalBlocked = 0;
+  private statVals     = [0, 0, 0, 0, 0, 0, 0];
   private currentSettings: ZenWebSettings = DEFAULT_SETTINGS;
   private currentDomain = '';
   private isCurrentSitePaused = false;
@@ -301,9 +301,16 @@ class ZenWebPopupUI {
     }
     this.animateRing(total / Math.max(total * 1.3, 60));
 
-    const mins = (s.totalTimeSavedSeconds / 60).toFixed(1);
+    const secs = s.totalTimeSavedSeconds || 0;
     if (this.timeSavedEl) {
-      this.timeSavedEl.textContent = `~${mins}m saved`;
+      if (secs === 0) {
+        this.timeSavedEl.textContent = '0s saved';
+      } else if (secs < 60) {
+        this.timeSavedEl.textContent = `~${secs}s saved`;
+      } else {
+        const mins = (secs / 60).toFixed(1);
+        this.timeSavedEl.textContent = `~${mins}m saved`;
+      }
     }
 
     // Update the currently visible card's counter

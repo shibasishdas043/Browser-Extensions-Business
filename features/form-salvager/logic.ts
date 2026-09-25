@@ -124,6 +124,119 @@ export function isSearchEngineSite(urlOrHost: string = typeof window !== 'undefi
   }
 }
 
+/* ── Custom Dropdown & React-Select Automation Helpers ── */
+
+export function getCustomDropdownContainer(el: HTMLElement): HTMLElement | null {
+  if (!el) return null;
+
+  // 1. Direct match on known custom containers or wrappers
+  if (
+    el.id === 'subjectsContainer' ||
+    el.id === 'state' ||
+    el.id === 'city' ||
+    el.classList.contains('subjects-auto-complete__control') ||
+    /select2-container|choices/i.test(el.className)
+  ) {
+    return el;
+  }
+
+  // 2. If element is inside known custom containers, return the container immediately
+  const known = el.closest<HTMLElement>(
+    '#subjectsContainer, #state, #city, .subjects-auto-complete__control, .select2-container, .choices'
+  );
+  if (known) return known;
+
+  // 3. For generic React-Select or custom tag/dropdown components:
+  // Walk up to find the control/wrapper that contains the value container or pills,
+  // strictly skipping inner input wrappers like .__input-container
+  let curr: HTMLElement | null = el.parentElement;
+  let candidate: HTMLElement | null = null;
+
+  while (curr && curr !== document.body) {
+    const cls = curr.className || '';
+    const isInputWrapper = /input-container|input_container/i.test(cls);
+
+    if (!isInputWrapper) {
+      if (
+        curr.id === 'subjectsContainer' ||
+        curr.id === 'state' ||
+        curr.id === 'city' ||
+        /control|select2|choices/i.test(cls) ||
+        ((cls.includes('-container') || cls.includes('__container')) && !cls.includes('input-container'))
+      ) {
+        if (
+          curr.querySelector(
+            '[class*="value-container"], [class*="valueContainer"], [class*="singleValue"], [class*="multiValue"], [class*="single-value"], [class*="multi-value"], [class*="placeholder"], input[id^="react-select"], input#subjectsInput'
+          )
+        ) {
+          candidate = curr;
+        }
+      }
+    }
+    curr = curr.parentElement;
+  }
+
+  return candidate;
+}
+
+export async function selectReactOption(inputElement: HTMLElement, textValue: string): Promise<boolean> {
+  if (!textValue) return false;
+  let targetInput: HTMLInputElement | null = null;
+  if (inputElement instanceof HTMLInputElement) {
+    targetInput = inputElement;
+  } else {
+    targetInput = inputElement.querySelector('input');
+  }
+
+  if (!targetInput) return false;
+
+  try {
+    targetInput.focus();
+  } catch {}
+
+  try {
+    targetInput.value = '';
+    document.execCommand('insertText', false, textValue);
+  } catch {
+    applyNativeInputValue(targetInput, textValue);
+    dispatchChangeEvents(targetInput);
+  }
+
+  await new Promise((r) => setTimeout(r, 60));
+
+  try {
+    targetInput.dispatchEvent(
+      new KeyboardEvent('keydown', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        which: 13,
+        bubbles: true,
+        cancelable: true,
+      })
+    );
+  } catch {}
+
+  await new Promise((r) => setTimeout(r, 60));
+  const openOption = Array.from(
+    document.querySelectorAll('[class*="-option"], [class*="__option"], [role="option"]')
+  ).find((opt) => opt.textContent?.trim().toLowerCase() === textValue.toLowerCase());
+
+  if (openOption instanceof HTMLElement) {
+    openOption.click();
+  }
+
+  return true;
+}
+
+export async function selectReactMultiOptions(inputElement: HTMLElement, values: string[]): Promise<void> {
+  for (const val of values) {
+    if (!val) continue;
+    await selectReactOption(inputElement, val);
+    await new Promise((r) => setTimeout(r, 120));
+  }
+}
+
 /**
  * Universal field classifier: Maps an element to its canonical FieldKind.
  */
@@ -137,15 +250,31 @@ export function classifyField(el: HTMLElement): FieldKind | null {
   if (el instanceof HTMLSelectElement) {
     return el.multiple ? 'select-multiple' : 'select-one';
   }
+
+  const customDropdown = getCustomDropdownContainer(el);
+  if (customDropdown) {
+    if (
+      customDropdown.classList.contains('subjects-auto-complete__control') ||
+      customDropdown.id === 'subjectsContainer' ||
+      customDropdown.querySelector('[class*="multiValue"], [class*="multi-value"], [class*="__multi-value"], .select2-selection--multiple') ||
+      el.id === 'subjectsInput'
+    ) {
+      return 'select-multiple';
+    }
+    return 'select-one';
+  }
+
   if (el instanceof HTMLInputElement) {
     const type = (el.type || 'text').toLowerCase();
     if (type === 'radio') return 'radio';
     if (type === 'checkbox') return 'checkbox';
-    if (['date', 'time', 'datetime-local', 'month', 'week'].includes(type)) return 'temporal';
     if (
+      ['date', 'time', 'datetime-local', 'month', 'week'].includes(type) ||
       el.classList.contains('hasDatepicker') ||
       /datepicker|timepicker|datetimepicker/i.test(el.className) ||
-      el.getAttribute('data-provide') === 'datepicker'
+      el.getAttribute('data-provide') === 'datepicker' ||
+      (el.id && /date|dob|birth|calendar/i.test(el.id)) ||
+      el.closest('.react-datepicker-wrapper, [class*="datepicker"], [class*="date-picker"]') !== null
     ) {
       return 'temporal';
     }
@@ -160,6 +289,10 @@ export function classifyField(el: HTMLElement): FieldKind | null {
 
 function applyNativeInputValue(input: HTMLInputElement | HTMLTextAreaElement, value: string): void {
   try {
+    const tracker = (input as any)._valueTracker;
+    if (tracker) {
+      tracker.setValue('');
+    }
     const proto = input instanceof HTMLInputElement ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
     const desc = Object.getOwnPropertyDescriptor(proto, 'value');
     if (desc && desc.set) {
@@ -174,6 +307,10 @@ function applyNativeInputValue(input: HTMLInputElement | HTMLTextAreaElement, va
 
 function applyNativeChecked(input: HTMLInputElement, checked: boolean): void {
   try {
+    const tracker = (input as any)._valueTracker;
+    if (tracker) {
+      tracker.setValue(!checked);
+    }
     const desc = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'checked');
     if (desc && desc.set) {
       desc.set.call(input, checked);
@@ -316,11 +453,12 @@ export class FormSalvager {
       }
     };
 
-    // Click listener handles radio/checkbox clicks and delegates datepicker/Select2 popup item clicks
+    // Click listener handles radio/checkbox clicks, label clicks, tag removes, and dropdown option clicks
     this.clickListener = (e: MouseEvent) => {
       const target = e.target as HTMLElement | null;
       if (!target) return;
 
+      // 1. Direct click on radio or checkbox input
       if (target instanceof HTMLInputElement && (target.type === 'radio' || target.type === 'checkbox')) {
         if (this.isSalvagableField(target)) {
           this.handleFieldUpdate(target, 'click');
@@ -328,18 +466,43 @@ export class FormSalvager {
         return;
       }
 
-      // Detect clicks inside datepicker calendar popups or custom dropdown option lists
-      const isWidgetClick = Boolean(
+      // 2. Click on label associated with radio or checkbox (e.g. Bootstrap custom-control or form-check)
+      const label = target instanceof HTMLLabelElement ? target : target.closest('label');
+      if (label) {
+        const forId = label.getAttribute('for');
+        let associatedInput: HTMLInputElement | null = null;
+        if (forId) {
+          const el = document.getElementById(forId);
+          if (el instanceof HTMLInputElement && (el.type === 'radio' || el.type === 'checkbox')) {
+            associatedInput = el;
+          }
+        } else {
+          associatedInput = label.querySelector('input[type="radio"], input[type="checkbox"]');
+        }
+
+        if (associatedInput && this.isSalvagableField(associatedInput)) {
+          window.setTimeout(() => {
+            if (associatedInput) {
+              this.handleFieldUpdate(associatedInput, 'label_click');
+            }
+          }, 40);
+        }
+      }
+
+      // 3. Detect clicks inside datepicker calendar popups or custom dropdown option lists or tag remove pills
+      const isWidgetOrTagClick = Boolean(
         target.closest(
-          '#ui-datepicker-div, .ui-datepicker, .flatpickr-calendar, .datepicker, .pika-single, .vanilla-calendar, [class*="datepicker"], [class*="calendar"], .select2-results__option, .select2-selection, .select2-container, .choices__list, .choices__item, [role="listbox"], [role="option"]'
+          '#ui-datepicker-div, .ui-datepicker, .flatpickr-calendar, .datepicker, .pika-single, .vanilla-calendar, [class*="datepicker"], [class*="calendar"], .select2-results__option, .select2-selection, .select2-container, .choices__list, .choices__item, [role="listbox"], [role="option"], [class*="-option"], [class*="__option"], [class*="multi-value"], [class*="multiValue"], [class*="remove"], [class*="indicator"], [class*="badge"]'
         )
       );
 
-      if (isWidgetClick) {
-        // Allow datepicker or dropdown widget to update DOM property, then scan immediately
+      if (isWidgetOrTagClick) {
         window.setTimeout(() => {
           this.scanActiveWidgets();
-        }, 60);
+        }, 50);
+        window.setTimeout(() => {
+          this.scanActiveWidgets();
+        }, 220);
       }
     };
 
@@ -361,8 +524,16 @@ export class FormSalvager {
       }
     };
 
-    // Keyboard shortcut: Alt+R (Windows/Linux) or ⌥R / Option+R (macOS) for instant hands-free restoration
+    // Keyboard shortcut: Alt+R for restoration; Enter or comma in custom tag inputs triggers immediate widget sync
     this.keydownListener = (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ',') {
+        const custom = getCustomDropdownContainer(e.target as HTMLElement);
+        if (custom) {
+          window.setTimeout(() => this.scanActiveWidgets(), 60);
+          window.setTimeout(() => this.scanActiveWidgets(), 220);
+        }
+      }
+
       const isAltOnly = e.altKey && !e.ctrlKey && !e.metaKey;
       const isR = e.code === 'KeyR' || e.key === 'r' || e.key === 'R' || e.key === '®';
 
@@ -395,13 +566,13 @@ export class FormSalvager {
   }
 
   /**
-   * Scans active form widgets (datepickers, Select2 dropdowns, sliders) for programmatic value changes.
+   * Scans active form widgets (datepickers, Select2 dropdowns, sliders, React-Select) for programmatic value changes.
    */
   private scanActiveWidgets(): void {
     if (!this.isRunning || isSearchEngineSite()) return;
 
     const candidates = document.querySelectorAll<HTMLElement>(
-      'input, select, textarea, [contenteditable="true"]'
+      'input, select, textarea, [contenteditable="true"], #state, #city, #subjectsContainer, [class*="-container"], [class*="__container"], [class*="select2-container"], .choices'
     );
 
     for (const el of Array.from(candidates)) {
@@ -608,36 +779,95 @@ export class FormSalvager {
       }
 
       case 'select-one': {
-        const select = el as HTMLSelectElement;
-        const val = select.value;
-        const selectedOpt = select.options[select.selectedIndex];
-        const selectedText = selectedOpt?.text?.trim() || '';
+        if (el instanceof HTMLSelectElement) {
+          const select = el;
+          const val = select.value;
+          const selectedOpt = select.options[select.selectedIndex];
+          const selectedText = selectedOpt?.text?.trim() || '';
 
-        // An option is a placeholder only if value is blank or text explicitly matches placeholder keywords
-        const isPlaceholder =
-          !val ||
-          (select.selectedIndex <= 0 &&
-            /^(select|choose|--|please\s+select)/i.test(selectedText));
+          // An option is a placeholder only if value is blank or text explicitly matches placeholder keywords
+          const isPlaceholder =
+            !val ||
+            (select.selectedIndex <= 0 &&
+              /^(select|choose|--|please\s+select)/i.test(selectedText));
+
+          return {
+            kind: 'select-one',
+            value: val || selectedText,
+            isEmpty: isPlaceholder,
+            wordCount: isPlaceholder ? 0 : 1,
+          };
+        }
+
+        // Custom dropdown / React-Select single-select
+        const customContainer = getCustomDropdownContainer(el) || el;
+        const singleValEl = customContainer.querySelector(
+          '[class*="singleValue"], [class*="single-value"], [class*="__single-value"], .select2-selection__rendered'
+        );
+        const text = (singleValEl?.textContent || '').trim();
+
+        if (text) {
+          return {
+            kind: 'select-one',
+            value: text,
+            isEmpty: false,
+            wordCount: 1,
+          };
+        }
 
         return {
           kind: 'select-one',
-          value: val || selectedText,
-          isEmpty: isPlaceholder,
-          wordCount: isPlaceholder ? 0 : 1,
+          value: '',
+          isEmpty: true,
+          wordCount: 0,
         };
       }
 
       case 'select-multiple': {
-        const select = el as HTMLSelectElement;
-        const selected = Array.from(select.selectedOptions)
-          .map((o) => o.value || o.text.trim())
-          .filter(Boolean);
+        if (el instanceof HTMLSelectElement) {
+          const select = el;
+          const selected = Array.from(select.selectedOptions)
+            .map((o) => o.value || o.text.trim())
+            .filter(Boolean);
+          return {
+            kind: 'select-multiple',
+            value: selected.join(', '),
+            selectedValues: selected,
+            isEmpty: selected.length === 0,
+            wordCount: selected.length,
+          };
+        }
+
+        // Custom dropdown / React-Select multi-select
+        const customContainer = getCustomDropdownContainer(el) || el;
+        const pillElements = Array.from(
+          customContainer.querySelectorAll(
+            '.subjects-auto-complete__multi-value, [class*="multiValue"], [class*="multi-value"], [class*="__multi-value"], .select2-selection__choice, .tagify__tag, .bootstrap-tagsinput .tag'
+          )
+        );
+
+        const multiLabels: string[] = [];
+        for (const pill of pillElements) {
+          const labelChild = pill.querySelector(
+            '[class*="label"], [class*="Label"], .subjects-auto-complete__multi-value__label, span'
+          );
+          if (labelChild && labelChild.textContent) {
+            const t = labelChild.textContent.trim();
+            if (t && !multiLabels.includes(t)) multiLabels.push(t);
+          } else {
+            const clone = pill.cloneNode(true) as HTMLElement;
+            clone.querySelectorAll('[role="button"], button, [class*="remove"], [class*="close"]').forEach((btn) => btn.remove());
+            const t = clone.textContent?.trim() || '';
+            if (t && !multiLabels.includes(t)) multiLabels.push(t);
+          }
+        }
+
         return {
           kind: 'select-multiple',
-          value: selected.join(', '),
-          selectedValues: selected,
-          isEmpty: selected.length === 0,
-          wordCount: selected.length,
+          value: multiLabels.join(', '),
+          selectedValues: multiLabels,
+          isEmpty: multiLabels.length === 0,
+          wordCount: multiLabels.length,
         };
       }
 
@@ -765,9 +995,9 @@ export class FormSalvager {
 
   /**
    * Applies a stored draft back to any element or group, dispatching synthetic events,
-   * setting prototype properties for React/Vue/Angular, and synchronizing Select2 wrappers.
+   * setting prototype properties for React/Vue/Angular, and synchronizing Select2 / React-Select wrappers.
    */
-  public applyFieldState(el: HTMLElement, draft: StoredDraft): void {
+  public async applyFieldState(el: HTMLElement, draft: StoredDraft): Promise<void> {
     const kind = draft.fieldKind || classifyField(el) || 'text';
 
     switch (kind) {
@@ -812,6 +1042,17 @@ export class FormSalvager {
             targetRadio.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }));
           } catch {}
           dispatchChangeEvents(targetRadio);
+
+          // Click associated label if available (handles visually hidden Bootstrap radios)
+          const assocLabel = targetRadio.id
+            ? document.querySelector<HTMLElement>(`label[for="${targetRadio.id}"]`)
+            : targetRadio.closest('label');
+          if (assocLabel) {
+            try {
+              assocLabel.click();
+            } catch {}
+          }
+
           flashRestoredGlow(targetRadio);
         }
         break;
@@ -827,7 +1068,7 @@ export class FormSalvager {
           );
 
           checkboxes.forEach((item) => {
-            const label = item.id ? document.querySelector(`label[for="${item.id}"]`) : item.closest('label');
+            const label = item.id ? document.querySelector<HTMLElement>(`label[for="${item.id}"]`) : item.closest('label');
             const labelText = label?.textContent?.trim() || '';
             const shouldCheck =
               draft.selectedValues!.includes(item.value) ||
@@ -850,6 +1091,17 @@ export class FormSalvager {
       }
 
       case 'select-one': {
+        const customContainer = getCustomDropdownContainer(el);
+        if (customContainer && !(el instanceof HTMLSelectElement)) {
+          const targetInput = el instanceof HTMLInputElement ? el : customContainer.querySelector('input');
+          if (targetInput && draft.value) {
+            await selectReactOption(targetInput, draft.value);
+            flashRestoredGlow(customContainer);
+            if (targetInput !== customContainer) flashRestoredGlow(targetInput);
+          }
+          break;
+        }
+
         const select = el as HTMLSelectElement;
         let matchedIndex = -1;
 
@@ -902,6 +1154,18 @@ export class FormSalvager {
       }
 
       case 'select-multiple': {
+        const customContainer = getCustomDropdownContainer(el);
+        if (customContainer && !(el instanceof HTMLSelectElement)) {
+          const targetInput = el instanceof HTMLInputElement ? el : customContainer.querySelector('input');
+          const targetVals = draft.selectedValues || draft.value.split(',').map((s) => s.trim()).filter(Boolean);
+          if (targetInput && targetVals.length > 0) {
+            await selectReactMultiOptions(targetInput, targetVals);
+            flashRestoredGlow(customContainer);
+            if (targetInput !== customContainer) flashRestoredGlow(targetInput);
+          }
+          break;
+        }
+
         const select = el as HTMLSelectElement;
         const targetVals = draft.selectedValues || draft.value.split(',').map((s) => s.trim());
         for (let i = 0; i < select.options.length; i++) {
@@ -1015,13 +1279,19 @@ export class FormSalvager {
         }
 
         case 'select-one': {
-          const select = el as HTMLSelectElement;
-          const currentVal = select.value;
-          const currentText = select.options[select.selectedIndex]?.text?.trim() || '';
+          let currentVal = '';
+          if (el instanceof HTMLSelectElement) {
+            currentVal = el.value || el.options[el.selectedIndex]?.text?.trim() || '';
+          } else {
+            const container = getCustomDropdownContainer(el) || el;
+            const single = container.querySelector(
+              '[class*="singleValue"], [class*="single-value"], [class*="__single-value"], .select2-selection__rendered'
+            );
+            currentVal = (single?.textContent || '').trim();
+          }
 
           const matchesDraft =
             currentVal === draft.value ||
-            currentText === draft.value ||
             currentVal.toLowerCase() === draft.value.toLowerCase();
 
           // Recoverable if current selection does not match draft
@@ -1032,9 +1302,19 @@ export class FormSalvager {
         }
 
         case 'select-multiple': {
-          const select = el as HTMLSelectElement;
-          const currentVals = Array.from(select.selectedOptions).map((o) => o.value);
-          const targetVals = draft.selectedValues || draft.value.split(',').map((s) => s.trim());
+          let currentVals: string[] = [];
+          if (el instanceof HTMLSelectElement) {
+            currentVals = Array.from(el.selectedOptions).map((o) => o.value || o.text.trim());
+          } else {
+            const container = getCustomDropdownContainer(el) || el;
+            currentVals = Array.from(
+              container.querySelectorAll(
+                '[class*="multiValue__label"], [class*="multi-value__label"], [class*="__multi-value__label"], .subjects-auto-complete__multi-value__label, .select2-selection__choice'
+              )
+            ).map((e) => (e.textContent || '').trim()).filter(Boolean);
+          }
+
+          const targetVals = draft.selectedValues || draft.value.split(',').map((s) => s.trim()).filter(Boolean);
           const isSame =
             currentVals.length === targetVals.length &&
             currentVals.every((v) => targetVals.includes(v));
@@ -1098,10 +1378,8 @@ export class FormSalvager {
         wordCount: totalWords,
         timeAgo: this.formatTimeAgo(latestTimestamp),
         siteUrl,
-        onReload: () => {
-          allRecoverable.forEach(({ el, draft }) => {
-            this.applyFieldState(el, draft);
-          });
+        onReload: async () => {
+          await this.restoreAllRecoverableDrafts(allRecoverable);
           recordProtectionEvent('formsBackedUp', allRecoverable.length).catch(() => {});
         },
         onDiscard: () => {
@@ -1112,6 +1390,117 @@ export class FormSalvager {
       });
     } else {
       dismissSiteRestorePrompt();
+    }
+  }
+
+  /**
+   * Evaluates whether an element is currently disabled or waiting for a parent selection.
+   */
+  public isFieldDisabledOrDependent(el: HTMLElement, draft?: StoredDraft): boolean {
+    if ((el as HTMLInputElement | HTMLSelectElement).disabled) return true;
+    if (el.getAttribute('aria-disabled') === 'true') return true;
+
+    const disabledAncestor = el.closest('[aria-disabled="true"], [disabled], .disabled, [class*="-isDisabled"], [class*="--is-disabled"]');
+    if (disabledAncestor) return true;
+
+    const container = getCustomDropdownContainer(el);
+    if (container) {
+      if (container.getAttribute('aria-disabled') === 'true') return true;
+      if (/isDisabled|disabled/i.test(container.className)) return true;
+      const innerInput = container.querySelector('input');
+      if (innerInput && (innerInput.disabled || innerInput.getAttribute('aria-disabled') === 'true')) {
+        return true;
+      }
+    }
+
+    if (el instanceof HTMLSelectElement && draft && draft.value) {
+      let hasTarget = false;
+      for (let i = 0; i < el.options.length; i++) {
+        const opt = el.options[i];
+        if (opt.value === draft.value || opt.text.trim() === draft.value) {
+          hasTarget = true;
+          break;
+        }
+      }
+      if (!hasTarget && el.options.length <= 1) {
+        return true;
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Polls until a dependent field is enabled by parent reactive updates or AJAX options.
+   */
+  private async waitForFieldReady(el: HTMLElement, draft: StoredDraft, maxWaitMs = 1200): Promise<boolean> {
+    const start = Date.now();
+    while (Date.now() - start < maxWaitMs) {
+      if (!this.isFieldDisabledOrDependent(el, draft)) {
+        return true;
+      }
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    return false;
+  }
+
+  /**
+   * Cascading restoration pipeline:
+   * Restores parent and independent fields first, waits for DOM reactivity,
+   * then restores dependent child dropdowns in cascading tiers.
+   */
+  public async restoreAllRecoverableDrafts(
+    items: Array<{ el: HTMLElement; draft: StoredDraft; key: string }>
+  ): Promise<void> {
+    const independent: typeof items = [];
+    const dependent: typeof items = [];
+
+    for (const item of items) {
+      if (this.isFieldDisabledOrDependent(item.el, item.draft)) {
+        dependent.push(item);
+      } else {
+        independent.push(item);
+      }
+    }
+
+    // Pass 1: Restore all non-dependent fields (inputs, radios, parent dropdowns, checkboxes)
+    for (const { el, draft } of independent) {
+      await this.applyFieldState(el, draft);
+    }
+
+    if (dependent.length === 0) return;
+
+    // Pass 2 & 3: Cascading restoration for dependent child fields
+    let pending = [...dependent];
+    let tier = 0;
+    const maxTiers = 3;
+
+    while (pending.length > 0 && tier < maxTiers) {
+      tier++;
+      await new Promise((r) => setTimeout(r, 180));
+
+      const readyThisRound: typeof items = [];
+      const stillBlocked: typeof items = [];
+
+      for (const item of pending) {
+        const isReady = await this.waitForFieldReady(item.el, item.draft, 700);
+        if (isReady) {
+          readyThisRound.push(item);
+        } else {
+          stillBlocked.push(item);
+        }
+      }
+
+      if (readyThisRound.length === 0 && stillBlocked.length > 0) {
+        readyThisRound.push(stillBlocked.shift()!);
+      }
+
+      for (const { el, draft } of readyThisRound) {
+        await this.applyFieldState(el, draft);
+        await new Promise((r) => setTimeout(r, 80));
+      }
+
+      pending = stillBlocked;
     }
   }
 
@@ -1190,6 +1579,15 @@ export class FormSalvager {
       }
     }
 
+    // Custom dropdown / React-Select (e.g. #state, #city, #subjectsContainer)
+    const customContainer = getCustomDropdownContainer(el);
+    if (customContainer) {
+      const containerId = customContainer.id || (el.id && el.id !== 'subjectsInput' ? el.id : '');
+      if (containerId) {
+        return `${DRAFT_PREFIX}${fullUrl}::form[${formId}]::custom_dropdown[#${containerId}]`;
+      }
+    }
+
     const id = el.id ? `#${el.id}` : '';
     const name = el.getAttribute('name') ? `[name="${el.getAttribute('name')}"]` : '';
     const placeholder = el.getAttribute('placeholder') ? `[ph="${el.getAttribute('placeholder')?.slice(0, 24)}"]` : '';
@@ -1210,6 +1608,13 @@ export class FormSalvager {
    * Walks up to parent form-group or item container for radio/checkbox groups.
    */
   private getElementHumanLabel(el: HTMLElement): string {
+    const customContainer = getCustomDropdownContainer(el);
+    if (customContainer) {
+      if (customContainer.id === 'state') return 'State';
+      if (customContainer.id === 'city') return 'City';
+      if (customContainer.id === 'subjectsContainer') return 'Subjects';
+    }
+
     const labelEl = el.id ? document.querySelector(`label[for="${el.id}"]`) : el.closest('label');
     if (labelEl && labelEl.textContent) {
       const text = labelEl.textContent.trim().replace(/\s*\*\s*$/, '');
@@ -1406,8 +1811,21 @@ export class FormSalvager {
         for (const node of Array.from(m.addedNodes)) {
           if (node instanceof HTMLElement) {
             if (
-              node.matches('textarea, input, select, [contenteditable="true"], [role="textbox"]') ||
-              node.querySelector('textarea, input, select, [contenteditable="true"], [role="textbox"]')
+              node.matches('textarea, input, select, [contenteditable="true"], [role="textbox"], [class*="multi-value"], [class*="multiValue"], [class*="singleValue"], [class*="single-value"]') ||
+              node.querySelector('textarea, input, select, [contenteditable="true"], [role="textbox"], [class*="multi-value"], [class*="multiValue"], [class*="singleValue"], [class*="single-value"]')
+            ) {
+              hasAddedInputs = true;
+              break;
+            }
+          }
+        }
+        if (hasAddedInputs) break;
+
+        for (const node of Array.from(m.removedNodes)) {
+          if (node instanceof HTMLElement) {
+            if (
+              node.matches('[class*="multi-value"], [class*="multiValue"], [class*="singleValue"], [class*="single-value"]') ||
+              node.querySelector('[class*="multi-value"], [class*="multiValue"], [class*="singleValue"], [class*="single-value"]')
             ) {
               hasAddedInputs = true;
               break;
@@ -1422,7 +1840,7 @@ export class FormSalvager {
         debounceScan = window.setTimeout(() => {
           this.checkForRecoverableDrafts();
           this.scanActiveWidgets();
-        }, 400);
+        }, 300);
       }
     });
 

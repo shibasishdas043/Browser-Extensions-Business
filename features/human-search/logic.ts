@@ -116,7 +116,7 @@ export class HumanSearchBypass {
           url.pathname = '/search';
         }
         url.searchParams.set(paramName, combined);
-        recordProtectionEvent('seoSpamFiltered', 5).catch(() => {});
+        recordProtectionEvent('seoSpamFiltered', 1).catch(() => {});
         window.location.href = url.toString();
       } else if (!q && input) {
         // If query field is empty on homepage, focus the input for immediate typing

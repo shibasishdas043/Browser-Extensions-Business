@@ -14,6 +14,17 @@ export const DEFAULT_SETTINGS: ZenWebSettings = {
 };
 
 export const DEFAULT_STATS: ProtectionStats = {
+  seoSpamFiltered: 0,
+  pinterestHidden: 0,
+  videosSuppressed: 0,
+  recipesSkipped: 0,
+  overlaysSmashed: 0,
+  fakeDownloadsDefused: 0,
+  formsBackedUp: 0,
+  totalTimeSavedSeconds: 0,
+};
+
+const DEMO_BASELINE: ProtectionStats = {
   seoSpamFiltered: 14,
   pinterestHidden: 28,
   videosSuppressed: 5,
@@ -23,6 +34,8 @@ export const DEFAULT_STATS: ProtectionStats = {
   formsBackedUp: 4,
   totalTimeSavedSeconds: 440,
 };
+
+const STATS_MIGRATION_KEY = 'zenweb_cleaned_demo_stats_v1';
 
 const SETTINGS_STORAGE_KEY = 'zenweb_settings';
 const STATS_STORAGE_KEY = 'zenweb_stats';
@@ -232,12 +245,57 @@ export function onStatsChange(callback: (newStats: ProtectionStats) => void): vo
 export async function getStats(): Promise<ProtectionStats> {
   try {
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      const result = await chrome.storage.local.get(STATS_STORAGE_KEY);
-      const stored = result[STATS_STORAGE_KEY];
+      const result = await chrome.storage.local.get([STATS_STORAGE_KEY, STATS_MIGRATION_KEY]);
+      let stored = result[STATS_STORAGE_KEY] as ProtectionStats | undefined;
+      const alreadyCleaned = Boolean(result[STATS_MIGRATION_KEY]);
+
+      if (!alreadyCleaned) {
+        if (stored) {
+          stored = {
+            seoSpamFiltered: Math.max(0, (stored.seoSpamFiltered || 0) - DEMO_BASELINE.seoSpamFiltered),
+            pinterestHidden: Math.max(0, (stored.pinterestHidden || 0) - DEMO_BASELINE.pinterestHidden),
+            videosSuppressed: Math.max(0, (stored.videosSuppressed || 0) - DEMO_BASELINE.videosSuppressed),
+            recipesSkipped: Math.max(0, (stored.recipesSkipped || 0) - DEMO_BASELINE.recipesSkipped),
+            overlaysSmashed: Math.max(0, (stored.overlaysSmashed || 0) - DEMO_BASELINE.overlaysSmashed),
+            fakeDownloadsDefused: Math.max(0, (stored.fakeDownloadsDefused || 0) - DEMO_BASELINE.fakeDownloadsDefused),
+            formsBackedUp: Math.max(0, (stored.formsBackedUp || 0) - DEMO_BASELINE.formsBackedUp),
+            totalTimeSavedSeconds: Math.max(0, (stored.totalTimeSavedSeconds || 0) - DEMO_BASELINE.totalTimeSavedSeconds),
+          };
+          await chrome.storage.local.set({
+            [STATS_STORAGE_KEY]: stored,
+            [STATS_MIGRATION_KEY]: true,
+          });
+        } else {
+          await chrome.storage.local.set({
+            [STATS_STORAGE_KEY]: { ...DEFAULT_STATS },
+            [STATS_MIGRATION_KEY]: true,
+          });
+        }
+      }
       return stored ? { ...DEFAULT_STATS, ...stored } : { ...DEFAULT_STATS };
     }
+    const alreadyCleaned = localStorage.getItem(STATS_MIGRATION_KEY);
     const local = localStorage.getItem(STATS_STORAGE_KEY);
-    return local ? { ...DEFAULT_STATS, ...JSON.parse(local) } : { ...DEFAULT_STATS };
+    let stored = local ? JSON.parse(local) : undefined;
+    if (!alreadyCleaned) {
+      if (stored) {
+        stored = {
+          seoSpamFiltered: Math.max(0, (stored.seoSpamFiltered || 0) - DEMO_BASELINE.seoSpamFiltered),
+          pinterestHidden: Math.max(0, (stored.pinterestHidden || 0) - DEMO_BASELINE.pinterestHidden),
+          videosSuppressed: Math.max(0, (stored.videosSuppressed || 0) - DEMO_BASELINE.videosSuppressed),
+          recipesSkipped: Math.max(0, (stored.recipesSkipped || 0) - DEMO_BASELINE.recipesSkipped),
+          overlaysSmashed: Math.max(0, (stored.overlaysSmashed || 0) - DEMO_BASELINE.overlaysSmashed),
+          fakeDownloadsDefused: Math.max(0, (stored.fakeDownloadsDefused || 0) - DEMO_BASELINE.fakeDownloadsDefused),
+          formsBackedUp: Math.max(0, (stored.formsBackedUp || 0) - DEMO_BASELINE.formsBackedUp),
+          totalTimeSavedSeconds: Math.max(0, (stored.totalTimeSavedSeconds || 0) - DEMO_BASELINE.totalTimeSavedSeconds),
+        };
+        localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(stored));
+      } else {
+        localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(DEFAULT_STATS));
+      }
+      localStorage.setItem(STATS_MIGRATION_KEY, 'true');
+    }
+    return local ? { ...DEFAULT_STATS, ...stored } : { ...DEFAULT_STATS };
   } catch (error) {
     console.error('Failed to load ZenWeb stats:', error);
     return { ...DEFAULT_STATS };
