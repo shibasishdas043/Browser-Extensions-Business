@@ -228,12 +228,26 @@ class ZenWebPopupUI {
     });
 
     // Vault Button
-    this.vaultBtn?.addEventListener('click', () => {
+    this.vaultBtn?.addEventListener('click', async () => {
       this.pressAnim(this.vaultBtn);
       if (typeof chrome !== 'undefined' && chrome.tabs && chrome.runtime?.getURL) {
-        chrome.tabs.create({ url: chrome.runtime.getURL('options/options.html#vault') });
+        const vaultUrl = chrome.runtime.getURL('options/options.html#vault');
+        const baseUrl = chrome.runtime.getURL('options/options.html');
+        try {
+          const tabs = await chrome.tabs.query({ url: `${baseUrl}*` });
+          if (tabs && tabs.length > 0 && tabs[0].id) {
+            await chrome.tabs.update(tabs[0].id, { url: vaultUrl, active: true });
+            if (tabs[0].windowId) {
+              await chrome.windows?.update(tabs[0].windowId, { focused: true });
+            }
+            return;
+          }
+        } catch {
+          // Fallback to tabs.create if tab query or update fails
+        }
+        chrome.tabs.create({ url: vaultUrl });
       } else {
-        openFullSettings();
+        window.open('/options/options.html#vault', '_blank');
       }
     });
 

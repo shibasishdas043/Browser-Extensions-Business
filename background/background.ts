@@ -11,11 +11,27 @@ const BADGE_COLOR_ACTIVE = '#10b981'; // ZenWeb Emerald
 const BADGE_COLOR_MUTED = '#64748b';
 
 /**
+ * Prevent unhandled promise rejections from transient tab closures & navigations in MV3
+ */
+self.addEventListener('unhandledrejection', (event) => {
+  const reason = (event as PromiseRejectionEvent).reason;
+  const msg = reason?.message || String(reason || '');
+  if (
+    msg.includes('No tab with id') ||
+    msg.includes('Receiving end does not exist') ||
+    msg.includes('The message port closed') ||
+    msg.includes('Could not establish connection')
+  ) {
+    event.preventDefault();
+  }
+});
+
+/**
  * Initialize context menus and badge defaults on installation or update.
  */
 chrome.runtime.onInstalled.addListener(() => {
   // Set default badge background
-  chrome.action.setBadgeBackgroundColor({ color: BADGE_COLOR_ACTIVE });
+  chrome.action.setBadgeBackgroundColor({ color: BADGE_COLOR_ACTIVE }).catch(() => {});
 
   // Clear existing menus and re-create cleanly
   chrome.contextMenus.removeAll(() => {
@@ -56,38 +72,44 @@ chrome.runtime.onInstalled.addListener(() => {
  */
 chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   if (!tab?.id) return;
+  try {
+    const tabExists = await chrome.tabs.get(tab.id).catch(() => null);
+    if (!tabExists) return;
 
-  switch (info.menuItemId) {
-    case 'zenweb-smash-overlay':
-      await dispatchToTab(tab.id, { action: 'SMASH_OVERLAY' });
-      break;
+    switch (info.menuItemId) {
+      case 'zenweb-smash-overlay':
+        await dispatchToTab(tab.id, { action: 'SMASH_OVERLAY' });
+        break;
 
-    case 'zenweb-jump-recipe':
-      await dispatchToTab(tab.id, { action: 'JUMP_RECIPE' });
-      break;
+      case 'zenweb-jump-recipe':
+        await dispatchToTab(tab.id, { action: 'JUMP_RECIPE' });
+        break;
 
-    case 'zenweb-open-vault':
-      chrome.tabs.create({ url: chrome.runtime.getURL('options/options.html#vault') });
-      break;
+      case 'zenweb-open-vault':
+        chrome.tabs.create({ url: chrome.runtime.getURL('options/options.html#vault') });
+        break;
 
-    case 'zenweb-open-dashboard':
-      chrome.runtime.openOptionsPage();
-      break;
-  }
+      case 'zenweb-open-dashboard':
+        chrome.runtime.openOptionsPage();
+        break;
+    }
+  } catch {}
 });
 
 /**
  * Handle Global Keyboard Shortcuts
  */
 chrome.commands.onCommand.addListener(async (command, tab) => {
-  const targetTabId = tab?.id;
-  if (!targetTabId) {
-    const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true });
-    if (!activeTab?.id) return;
-    await routeCommand(command, activeTab.id);
-  } else {
-    await routeCommand(command, targetTabId);
-  }
+  try {
+    const targetTabId = tab?.id;
+    if (!targetTabId) {
+      const [activeTab] = await chrome.tabs.query({ active: true, currentWindow: true }).catch(() => []);
+      if (!activeTab?.id) return;
+      await routeCommand(command, activeTab.id);
+    } else {
+      await routeCommand(command, targetTabId);
+    }
+  } catch {}
 });
 
 async function routeCommand(command: string, tabId: number): Promise<void> {
@@ -103,11 +125,15 @@ async function routeCommand(command: string, tabId: number): Promise<void> {
  */
 async function dispatchToTab(tabId: number, msg: ExtensionMessage): Promise<void> {
   try {
+    const tab = await chrome.tabs.get(tabId).catch(() => null);
+    if (!tab) return;
     await chrome.tabs.sendMessage(tabId, msg);
   } catch {
     // If content script was not injected or is unresponsive, inject fallback action
     if (msg.action === 'SMASH_OVERLAY') {
       try {
+        const tab = await chrome.tabs.get(tabId).catch(() => null);
+        if (!tab) return;
         await chrome.scripting.executeScript({
           target: { tabId },
           func: () => {
@@ -197,11 +223,14 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
       if (tabId) {
         const count = Number(message.payload?.count || 0);
         const text = count > 0 ? String(count > 99 ? '99+' : count) : '';
-        chrome.action.setBadgeText({ text, tabId });
-        chrome.action.setBadgeBackgroundColor({
-          color: message.payload?.paused ? BADGE_COLOR_MUTED : BADGE_COLOR_ACTIVE,
-          tabId,
-        });
+        chrome.tabs.get(tabId).then((tab) => {
+          if (!tab) return;
+          chrome.action.setBadgeText({ text, tabId }).catch(() => {});
+          chrome.action.setBadgeBackgroundColor({
+            color: message.payload?.paused ? BADGE_COLOR_MUTED : BADGE_COLOR_ACTIVE,
+            tabId,
+          }).catch(() => {});
+        }).catch(() => {});
       }
       sendResponse({ success: true });
       break;
@@ -223,12 +252,16 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
       break;
   }
 
-  return true;
+  return false;
 });
 
 // Clean up badge when tab navigates to a new page
 chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
   if (changeInfo.status === 'loading') {
-    chrome.action.setBadgeText({ text: '', tabId });
+    chrome.tabs.get(tabId).then((tab) => {
+      if (tab) {
+        chrome.action.setBadgeText({ text: '', tabId }).catch(() => {});
+      }
+    }).catch(() => {});
   }
 });

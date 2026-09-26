@@ -147,12 +147,52 @@ export async function toggleDomainWhitelist(domain: string): Promise<boolean> {
 }
 
 /**
+ * Saves complete protection stats to storage.
+ */
+export async function saveStats(stats: ProtectionStats): Promise<void> {
+  try {
+    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+      await chrome.storage.local.set({ [STATS_STORAGE_KEY]: stats });
+      return;
+    }
+    localStorage.setItem(STATS_STORAGE_KEY, JSON.stringify(stats));
+  } catch (error) {
+    console.error('Failed to save ZenWeb stats:', error);
+  }
+}
+
+export interface ImportResult {
+  success: boolean;
+  error?: string;
+  settingsRestored: boolean;
+  whitelistedDomainsCount: number;
+  statsRestored: boolean;
+  draftsRestoredCount: number;
+}
+
+export interface ExportMetaResult {
+  jsonStr: string;
+  totalDrafts: number;
+  totalDomains: number;
+  totalExclusions: number;
+}
+
+/**
  * Exports all settings and saved drafts to a downloadable JSON payload.
  */
 export async function exportSettingsAndDrafts(): Promise<string> {
+  const meta = await exportSettingsAndDraftsWithMeta();
+  return meta.jsonStr;
+}
+
+/**
+ * Exports settings, statistics, exclusions, and drafts with metadata counts.
+ */
+export async function exportSettingsAndDraftsWithMeta(): Promise<ExportMetaResult> {
   const settings = await getSettings();
   const stats = await getStats();
   const drafts: Record<string, any> = {};
+  const uniqueDomains = new Set<string>();
 
   try {
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
@@ -160,54 +200,229 @@ export async function exportSettingsAndDrafts(): Promise<string> {
       for (const [k, v] of Object.entries(all)) {
         if (k.startsWith('zenweb_draft_')) {
           drafts[k] = v;
+          if (v && typeof v === 'object') {
+            const rawUrl = (v as any).url || (v as any).siteUrl || '';
+            try {
+              const host = new URL(rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`).hostname.replace(/^www\./, '');
+              if (host) uniqueDomains.add(host);
+            } catch {
+              if (rawUrl) uniqueDomains.add(rawUrl.split('/')[0]);
+            }
+          }
         }
       }
     } else {
       for (let i = 0; i < localStorage.length; i++) {
         const k = localStorage.key(i);
         if (k && k.startsWith('zenweb_draft_')) {
-          drafts[k] = JSON.parse(localStorage.getItem(k) || '{}');
+          try {
+            const item = JSON.parse(localStorage.getItem(k) || '{}');
+            drafts[k] = item;
+            const rawUrl = item.url || item.siteUrl || '';
+            if (rawUrl) {
+              try {
+                const host = new URL(rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`).hostname.replace(/^www\./, '');
+                if (host) uniqueDomains.add(host);
+              } catch {
+                uniqueDomains.add(rawUrl.split('/')[0]);
+              }
+            }
+          } catch {}
         }
       }
     }
-  } catch {}
+  } catch (err) {
+    console.error('Failed reading drafts for export:', err);
+  }
+
+  const totalDrafts = Object.keys(drafts).length;
+  const totalDomains = uniqueDomains.size;
+  const totalExclusions = settings.whitelistedDomains?.length || 0;
 
   const backup = {
-    version: '1.0.0',
+    format: 'zenweb_backup',
+    version: '2.0.0',
     timestamp: Date.now(),
+    exportedAt: new Date().toISOString(),
+    summary: {
+      totalDrafts,
+      totalDomains,
+      totalExclusions,
+      totalTimeSavedSeconds: stats.totalTimeSavedSeconds || 0,
+    },
     settings,
     stats,
     drafts,
   };
 
-  return JSON.stringify(backup, null, 2);
+  return {
+    jsonStr: JSON.stringify(backup, null, 2),
+    totalDrafts,
+    totalDomains,
+    totalExclusions,
+  };
 }
 
 /**
- * Imports settings and drafts from a JSON backup.
+ * Imports and seamlessly validates settings, statistics, exclusions, and drafts from a JSON backup.
  */
-export async function importSettingsAndDrafts(jsonStr: string): Promise<boolean> {
-  try {
-    const data = JSON.parse(jsonStr);
-    if (!data || typeof data !== 'object') return false;
+export async function importSettingsAndDrafts(jsonStr: string): Promise<ImportResult> {
+  const result: ImportResult = {
+    success: false,
+    settingsRestored: false,
+    whitelistedDomainsCount: 0,
+    statsRestored: false,
+    draftsRestoredCount: 0,
+  };
 
-    if (data.settings && typeof data.settings === 'object') {
-      await saveSettings({ ...DEFAULT_SETTINGS, ...data.settings });
+  try {
+    if (!jsonStr || typeof jsonStr !== 'string') {
+      result.error = 'Empty or invalid backup data provided.';
+      return result;
     }
 
-    if (data.drafts && typeof data.drafts === 'object') {
-      if (typeof chrome !== 'undefined' && chrome.storage?.local) {
-        await chrome.storage.local.set(data.drafts);
+    let data: any;
+    try {
+      data = JSON.parse(jsonStr);
+    } catch {
+      result.error = 'Invalid JSON syntax. Please select a valid .json backup file.';
+      return result;
+    }
+
+    if (!data || typeof data !== 'object') {
+      result.error = 'Unrecognized backup structure.';
+      return result;
+    }
+
+    // 1. Resolve and restore Settings
+    const rawSettings = data.settings && typeof data.settings === 'object'
+      ? data.settings
+      : (data.masterEnabled !== undefined ? data : null);
+
+    if (rawSettings && typeof rawSettings === 'object') {
+      let cleanDomains: string[] = [];
+      if (Array.isArray(rawSettings.whitelistedDomains)) {
+        cleanDomains = Array.from(
+          new Set(
+            rawSettings.whitelistedDomains
+              .filter((d: any) => typeof d === 'string' && d.trim().length > 0)
+              .map((d: string) =>
+                d.trim().toLowerCase().replace(/^https?:\/\//, '').replace(/^www\./, '').split('/')[0].split(':')[0]
+              )
+              .filter(Boolean)
+          )
+        ) as string[];
       } else {
+        const currentSettings = await getSettings();
+        cleanDomains = currentSettings.whitelistedDomains || [];
+      }
+
+      const mergedSettings: ZenWebSettings = {
+        masterEnabled: typeof rawSettings.masterEnabled === 'boolean' ? rawSettings.masterEnabled : DEFAULT_SETTINGS.masterEnabled,
+        humanSearchEnabled: typeof rawSettings.humanSearchEnabled === 'boolean' ? rawSettings.humanSearchEnabled : DEFAULT_SETTINGS.humanSearchEnabled,
+        pinterestBlockerEnabled: typeof rawSettings.pinterestBlockerEnabled === 'boolean' ? rawSettings.pinterestBlockerEnabled : DEFAULT_SETTINGS.pinterestBlockerEnabled,
+        floatingVideoKillerEnabled: typeof rawSettings.floatingVideoKillerEnabled === 'boolean' ? rawSettings.floatingVideoKillerEnabled : DEFAULT_SETTINGS.floatingVideoKillerEnabled,
+        recipeSkipperEnabled: typeof rawSettings.recipeSkipperEnabled === 'boolean' ? rawSettings.recipeSkipperEnabled : DEFAULT_SETTINGS.recipeSkipperEnabled,
+        recipeReaderEnabled: typeof rawSettings.recipeReaderEnabled === 'boolean' ? rawSettings.recipeReaderEnabled : DEFAULT_SETTINGS.recipeReaderEnabled,
+        autoOverlaySmasherEnabled: typeof rawSettings.autoOverlaySmasherEnabled === 'boolean' ? rawSettings.autoOverlaySmasherEnabled : DEFAULT_SETTINGS.autoOverlaySmasherEnabled,
+        fakeDownloadGuardEnabled: typeof rawSettings.fakeDownloadGuardEnabled === 'boolean' ? rawSettings.fakeDownloadGuardEnabled : DEFAULT_SETTINGS.fakeDownloadGuardEnabled,
+        formSalvagerEnabled: typeof rawSettings.formSalvagerEnabled === 'boolean' ? rawSettings.formSalvagerEnabled : DEFAULT_SETTINGS.formSalvagerEnabled,
+        whitelistedDomains: cleanDomains,
+      };
+
+      await saveSettings(mergedSettings);
+      result.settingsRestored = true;
+      result.whitelistedDomainsCount = cleanDomains.length;
+    }
+
+    // 2. Resolve and restore Stats (if present)
+    if (data.stats && typeof data.stats === 'object') {
+      const cleanStats: ProtectionStats = {
+        seoSpamFiltered: Math.max(0, Number(data.stats.seoSpamFiltered) || 0),
+        pinterestHidden: Math.max(0, Number(data.stats.pinterestHidden) || 0),
+        videosSuppressed: Math.max(0, Number(data.stats.videosSuppressed) || 0),
+        recipesSkipped: Math.max(0, Number(data.stats.recipesSkipped) || 0),
+        overlaysSmashed: Math.max(0, Number(data.stats.overlaysSmashed) || 0),
+        fakeDownloadsDefused: Math.max(0, Number(data.stats.fakeDownloadsDefused) || 0),
+        formsBackedUp: Math.max(0, Number(data.stats.formsBackedUp) || 0),
+        totalTimeSavedSeconds: Math.max(0, Number(data.stats.totalTimeSavedSeconds) || 0),
+      };
+      await saveStats(cleanStats);
+      result.statsRestored = true;
+    }
+
+    // 3. Resolve and restore Saved Drafts (supports dictionary map or array format)
+    const normalizedDrafts: Record<string, any> = {};
+
+    if (data.drafts) {
+      if (Array.isArray(data.drafts)) {
+        for (const item of data.drafts) {
+          if (item && typeof item === 'object') {
+            const rawKey = item.fieldKey || item.key || item.id || `field_${Date.now()}_${Math.random()}`;
+            const storageKey = rawKey.startsWith('zenweb_draft_') ? rawKey : `zenweb_draft_${rawKey}`;
+            normalizedDrafts[storageKey] = {
+              url: item.url || '',
+              siteUrl: item.siteUrl || item.url || '',
+              fieldKey: storageKey,
+              fieldLabel: item.fieldLabel || 'Imported Field',
+              fieldKind: item.fieldKind || 'text',
+              value: typeof item.value === 'string' ? item.value : String(item.value || ''),
+              checked: Boolean(item.checked),
+              selectedValues: Array.isArray(item.selectedValues) ? item.selectedValues : undefined,
+              timestamp: Number(item.timestamp) || Date.now(),
+              wordCount: Number(item.wordCount) || (typeof item.value === 'string' ? item.value.trim().split(/\s+/).filter(Boolean).length : 0),
+              isContentEditable: Boolean(item.isContentEditable),
+              revisions: Array.isArray(item.revisions) ? item.revisions : [],
+            };
+          }
+        }
+      } else if (typeof data.drafts === 'object') {
         for (const [k, v] of Object.entries(data.drafts)) {
-          localStorage.setItem(k, JSON.stringify(v));
+          if (v && typeof v === 'object') {
+            const storageKey = k.startsWith('zenweb_draft_') ? k : `zenweb_draft_${k}`;
+            const item = v as any;
+            normalizedDrafts[storageKey] = {
+              url: item.url || '',
+              siteUrl: item.siteUrl || item.url || '',
+              fieldKey: storageKey,
+              fieldLabel: item.fieldLabel || 'Imported Field',
+              fieldKind: item.fieldKind || 'text',
+              value: typeof item.value === 'string' ? item.value : String(item.value || ''),
+              checked: Boolean(item.checked),
+              selectedValues: Array.isArray(item.selectedValues) ? item.selectedValues : undefined,
+              timestamp: Number(item.timestamp) || Date.now(),
+              wordCount: Number(item.wordCount) || (typeof item.value === 'string' ? item.value.trim().split(/\s+/).filter(Boolean).length : 0),
+              isContentEditable: Boolean(item.isContentEditable),
+              revisions: Array.isArray(item.revisions) ? item.revisions : [],
+            };
+          }
         }
       }
+
+      const draftCount = Object.keys(normalizedDrafts).length;
+      if (draftCount > 0) {
+        if (typeof chrome !== 'undefined' && chrome.storage?.local) {
+          await chrome.storage.local.set(normalizedDrafts);
+        } else {
+          for (const [k, v] of Object.entries(normalizedDrafts)) {
+            localStorage.setItem(k, JSON.stringify(v));
+          }
+        }
+        result.draftsRestoredCount = draftCount;
+      }
     }
-    return true;
-  } catch (err) {
+
+    if (!result.settingsRestored && result.draftsRestoredCount === 0 && !result.statsRestored) {
+      result.error = 'Backup file contains neither valid settings nor saved drafts.';
+      return result;
+    }
+
+    result.success = true;
+    return result;
+  } catch (err: any) {
     console.error('Failed to import backup:', err);
-    return false;
+    result.error = err?.message || 'Unexpected error while restoring backup.';
+    return result;
   }
 }
 

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useTransition } from 'react';
+import React, { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, useTransition } from 'react';
 import { gsap } from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
@@ -8,17 +8,18 @@ import {
   Hammer, AlertTriangle, FileText, Lock,
   Sparkles, Check, RotateCcw,
   Heart, Coffee, ExternalLink, Archive, Copy, Trash2, X, CheckCircle2,
-  Globe, Download, Upload, Command, Plus,
+  Globe, Download, Upload, Command, Plus, Layers,
 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import {
   getSettings, updateSetting, saveSettings,
   DEFAULT_SETTINGS, getStats, resetStats, onSettingsChange, onStatsChange,
   addDomainToWhitelist, removeDomainFromWhitelist,
-  exportSettingsAndDrafts, importSettingsAndDrafts,
+  exportSettingsAndDraftsWithMeta, importSettingsAndDrafts,
 } from '@/utils/storage';
 import { ZenWebSettings, ProtectionStats, SettingKey } from '@/types';
 import { getAllSavedDrafts, deleteSavedDraft, StoredDraft } from '@/features/form-salvager/logic';
+import { VaultSearchEngine, HighlightMatches, WebsiteDraftGroup, FormSectionGroup } from './vaultSearch';
 
 gsap.registerPlugin(ScrollTrigger, ScrollToPlugin);
 
@@ -36,14 +37,14 @@ interface ProtectionItem {
 }
 
 const PROTECTIONS: ProtectionItem[] = [
-  { key: 'fakeDownloadGuardEnabled', statKey: 'fakeDownloadsDefused', category: 'security', categoryLabel: 'Security & Privacy', name: 'Deceptive Download Guard',      description: 'Visibly flags and quarantines deceptive download advertising banners impersonating files.',                                 targetScope: 'File Portals & Mirrors',  icon: AlertTriangle, statUnit: 'trap banners defused'     },
-  { key: 'formSalvagerEnabled',      statKey: 'formsBackedUp',        category: 'security', categoryLabel: 'Security & Privacy', name: 'Form Salvager & Crash Guard', description: 'Continuously checkpoints in-progress text inputs into sandboxed storage to safeguard against tab crashes.',                targetScope: 'Forms & Textareas',       icon: FileText,      statUnit: 'forms autosaved'          },
-  { key: 'humanSearchEnabled',       statKey: 'seoSpamFiltered',      category: 'search',   categoryLabel: 'Search & Discovery', name: 'Human Search Bypass',           description: 'Injects community discussions and forum filters into search engines to bypass bloated AI content mills.',                    targetScope: 'Google & Search Engines', icon: Search,        statUnit: 'spam results bypassed'    },
-  { key: 'pinterestBlockerEnabled',  statKey: 'pinterestHidden',      category: 'search',   categoryLabel: 'Search & Discovery', name: 'Pinterest Wall Demolisher',     description: 'Silently conceals Pinterest boards and forced-signup preview walls from image search results.',                             targetScope: 'Image & Web Search',      icon: PinOff,        statUnit: 'walled pins hidden'       },
-  { key: 'floatingVideoKillerEnabled',statKey: 'videosSuppressed',    category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Sticky Video Suppressor',       description: 'Neutralizes picture-in-picture commercial players that float and follow your viewport scroll.',                            targetScope: 'News & Media Outlets',    icon: VideoOff,      statUnit: 'floating players silenced'},
-  { key: 'recipeSkipperEnabled',     statKey: 'recipesSkipped',       category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Recipe Story Fluff Skipper',   description: 'Parses recipe JSON-LD schema to auto-surface ingredients and instructions instantly without life stories.',                  targetScope: 'Food & Cooking Sites',    icon: ChefHat,       statUnit: 'stories skipped'          },
-  { key: 'recipeReaderEnabled',      statKey: 'recipesSkipped',       category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Recipe Reader View',           description: 'Presents a clean, distraction-free modal overlay of ingredients with interactive checklist and steps.',                     targetScope: 'Food & Cooking Sites',    icon: ChefHat,       statUnit: 'clean views generated'    },
-  { key: 'autoOverlaySmasherEnabled',statKey: 'overlaysSmashed',      category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Modal & Paywall Smasher',      description: 'Detects screen-darkening newsletter modals, smashing backdrops and restoring scrolling.',                                  targetScope: 'All Webpages',            icon: Hammer,        statUnit: 'modals neutralized'       },
+  { key: 'fakeDownloadGuardEnabled', statKey: 'fakeDownloadsDefused', category: 'security', categoryLabel: 'Security & Privacy', name: 'Deceptive Download Guard',      description: 'Flags and blocks fake "Download" buttons and ad traps.',                                    targetScope: 'File Portals & Mirrors',  icon: AlertTriangle, statUnit: 'trap banners defused'     },
+  { key: 'formSalvagerEnabled',      statKey: 'formsBackedUp',        category: 'security', categoryLabel: 'Security & Privacy', name: 'Form Salvager & Crash Guard', description: 'Auto-saves text you type so you never lose drafts if a tab crashes.',                       targetScope: 'Forms & Textareas',       icon: FileText,      statUnit: 'forms autosaved'          },
+  { key: 'humanSearchEnabled',       statKey: 'seoSpamFiltered',      category: 'search',   categoryLabel: 'Search & Discovery', name: 'Human Search Bypass',           description: 'Surfaces real forum discussions and filters out AI search spam.',                            targetScope: 'Google & Search Engines', icon: Search,        statUnit: 'spam results bypassed'    },
+  { key: 'pinterestBlockerEnabled',  statKey: 'pinterestHidden',      category: 'search',   categoryLabel: 'Search & Discovery', name: 'Pinterest Wall Demolisher',     description: 'Hides Pinterest clutter and forced login walls from search results.',                        targetScope: 'Image & Web Search',      icon: PinOff,        statUnit: 'walled pins hidden'       },
+  { key: 'floatingVideoKillerEnabled',statKey: 'videosSuppressed',    category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Sticky Video Suppressor',       description: 'Stops annoying floating video ads that follow you as you scroll.',                           targetScope: 'News & Media Outlets',    icon: VideoOff,      statUnit: 'floating players silenced'},
+  { key: 'recipeSkipperEnabled',     statKey: 'recipesSkipped',       category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Recipe Story Fluff Skipper',   description: 'Skips long life stories and jumps straight to the recipe ingredients.',                      targetScope: 'Food & Cooking Sites',    icon: ChefHat,       statUnit: 'stories skipped'          },
+  { key: 'recipeReaderEnabled',      statKey: 'recipesSkipped',       category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Recipe Reader View',           description: 'Opens a clean reader with ingredient checklists and clear steps.',                           targetScope: 'Food & Cooking Sites',    icon: ChefHat,       statUnit: 'clean views generated'    },
+  { key: 'autoOverlaySmasherEnabled',statKey: 'overlaysSmashed',      category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Modal & Paywall Smasher',      description: 'Closes newsletter popups, removes blur, and restores scrolling.',                            targetScope: 'All Webpages',            icon: Hammer,        statUnit: 'modals neutralized'       },
 ];
 
 const CATEGORY_TABS = [
@@ -113,6 +114,74 @@ function AnimatedNumber({ value, style }: { value: number; style?: React.CSSProp
   return <span ref={elRef} style={style}>{value}</span>;
 }
 
+/* ── Saved Drafts Vault Helpers ─────────────────────────── */
+
+function formatReadableName(str: string): string {
+  return str
+    .replace(/[-_]+/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .split(' ')
+    .filter(Boolean)
+    .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+    .join(' ');
+}
+
+function parseDraftMetadata(draft: StoredDraft) {
+  let domain = 'unknown';
+  let path = '';
+  try {
+    const rawUrl = draft.url || draft.siteUrl || '';
+    const parsed = new URL(rawUrl.startsWith('http') ? rawUrl : `https://${rawUrl}`);
+    domain = parsed.hostname.replace(/^www\./, '');
+    path = parsed.pathname;
+  } catch {
+    domain = (draft.url || '').split('/')[0] || 'unknown';
+  }
+
+  const formMatch = draft.fieldKey.match(/::form\[([^\]]+)\]/);
+  const rawFormId = formMatch ? formMatch[1].trim() : 'no-form';
+
+  let formName = 'Main Form';
+  let sectionId = rawFormId;
+
+  if (rawFormId === 'no-form' || rawFormId === 'idx_0' || !rawFormId) {
+    if (path && path !== '/') {
+      const cleanPath = path.replace(/^\/|\/$/g, '');
+      const pathSegment = cleanPath.split('/').pop() || cleanPath;
+      formName = formatReadableName(pathSegment) + ' Form';
+      sectionId = `path_${cleanPath}`;
+    } else {
+      formName = 'Default Form';
+      sectionId = 'default_form';
+    }
+  } else if (rawFormId.startsWith('idx_')) {
+    const num = parseInt(rawFormId.replace('idx_', ''), 10) + 1;
+    formName = `Form Section #${num}`;
+    sectionId = rawFormId;
+  } else {
+    formName = formatReadableName(rawFormId);
+    sectionId = rawFormId;
+  }
+
+  return { domain, path, formName, sectionId };
+}
+
+function WebsiteFavicon({ domain, size = 18 }: { domain: string; size?: number }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) {
+    return <Globe style={{ width: size, height: size, color: '#15803d' }} className="flex-shrink-0" />;
+  }
+  return (
+    <img
+      src={`https://www.google.com/s2/favicons?domain=${domain}&sz=64`}
+      alt={domain}
+      style={{ width: size, height: size }}
+      className="rounded-sm flex-shrink-0"
+      onError={() => setFailed(true)}
+    />
+  );
+}
+
 /* ─────────────────────────────────────────────────────────
    Dashboard
    ───────────────────────────────────────────────────────── */
@@ -127,6 +196,8 @@ export function Dashboard() {
   const [vaultDrafts, setVaultDrafts]   = useState<StoredDraft[]>([]);
   const [copiedKey, setCopiedKey]       = useState<string | null>(null);
   const [newDomain, setNewDomain]       = useState('');
+  const [isImporting, setIsImporting]   = useState(false);
+  const [isDraggingBackup, setIsDraggingBackup] = useState(false);
   const fileInputRef                    = useRef<HTMLInputElement>(null);
   const [, startTransition]             = useTransition();
   const isMacClient                     = typeof navigator !== 'undefined' && (
@@ -136,11 +207,50 @@ export function Dashboard() {
   );
   const [shortcutOS, setShortcutOS]     = useState<'mac' | 'win'>(() => (isMacClient ? 'mac' : 'win'));
 
-  const handleOpenVault = async () => {
+  const handleOpenVault = useCallback(async () => {
     const drafts = await getAllSavedDrafts();
     setVaultDrafts(drafts);
     setVaultOpen(true);
-  };
+    if (window.location.hash !== '#vault') {
+      history.replaceState(null, '', '#vault');
+    }
+  }, []);
+
+  const handleCloseVault = useCallback(() => {
+    setVaultOpen(false);
+    if (window.location.hash === '#vault') {
+      history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+  }, []);
+
+  /* ── Hash routing for #vault ────────────────────────── */
+  useEffect(() => {
+    const checkHash = () => {
+      if (window.location.hash === '#vault') {
+        handleOpenVault();
+      } else {
+        setVaultOpen(false);
+      }
+    };
+
+    checkHash();
+    window.addEventListener('hashchange', checkHash);
+    return () => {
+      window.removeEventListener('hashchange', checkHash);
+    };
+  }, [handleOpenVault]);
+
+  /* ── Escape key closes vault ────────────────────────── */
+  useEffect(() => {
+    if (!vaultOpen) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleCloseVault();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [vaultOpen, handleCloseVault]);
 
   const handleCopyDraft = (key: string, text: string) => {
     navigator.clipboard.writeText(text);
@@ -153,6 +263,89 @@ export function Dashboard() {
     await deleteSavedDraft(key);
     setVaultDrafts((prev) => prev.filter((d) => d.fieldKey !== key));
     showToast('Draft removed from storage');
+  };
+
+  const [selectedWebsite, setSelectedWebsite] = useState<string | null>(null);
+  const [vaultSearchQuery, setVaultSearchQuery] = useState('');
+  const deferredSearchQuery = useDeferredValue(vaultSearchQuery);
+
+  const groupedWebsites = useMemo(() => {
+    const map = new Map<string, WebsiteDraftGroup>();
+
+    for (const draft of vaultDrafts) {
+      const { domain, formName, sectionId } = parseDraftMetadata(draft);
+
+      if (!map.has(domain)) {
+        map.set(domain, {
+          domain,
+          displayUrl: draft.url,
+          drafts: [],
+          sections: [],
+          totalWords: 0,
+          lastUpdated: 0,
+        });
+      }
+
+      const siteGroup = map.get(domain)!;
+      siteGroup.drafts.push(draft);
+      siteGroup.totalWords += draft.wordCount || 0;
+      if (draft.timestamp > siteGroup.lastUpdated) {
+        siteGroup.lastUpdated = draft.timestamp;
+      }
+
+      let section = siteGroup.sections.find((s) => s.sectionId === sectionId);
+      if (!section) {
+        section = {
+          sectionId,
+          formName,
+          url: draft.url,
+          drafts: [],
+        };
+        siteGroup.sections.push(section);
+      }
+      section.drafts.push(draft);
+    }
+
+    return Array.from(map.values()).sort((a, b) => b.lastUpdated - a.lastUpdated);
+  }, [vaultDrafts]);
+
+  // High-performance pre-indexed search engine instance
+  const searchEngine = useMemo(() => {
+    return new VaultSearchEngine(groupedWebsites);
+  }, [groupedWebsites]);
+
+  const filteredWebsites = useMemo(() => {
+    return searchEngine.search(deferredSearchQuery);
+  }, [searchEngine, deferredSearchQuery]);
+
+  const activeWebsiteDomain = useMemo(() => {
+    if (selectedWebsite && filteredWebsites.some((g) => g.domain === selectedWebsite)) {
+      return selectedWebsite;
+    }
+    return filteredWebsites[0]?.domain || null;
+  }, [selectedWebsite, filteredWebsites]);
+
+  const activeSiteGroup = useMemo(() => {
+    return filteredWebsites.find((g) => g.domain === activeWebsiteDomain) || null;
+  }, [filteredWebsites, activeWebsiteDomain]);
+
+  const handleCopyWebsiteDrafts = (site: WebsiteDraftGroup) => {
+    const formatted = site.sections
+      .map((sec) => `## ${sec.formName} (${sec.url})\n` + sec.drafts.map((d) => `${d.fieldLabel || 'Field'}: ${d.value}`).join('\n'))
+      .join('\n\n');
+    navigator.clipboard.writeText(formatted);
+    setCopiedKey('website_' + site.domain);
+    setTimeout(() => setCopiedKey(null), 2000);
+    showToast(`Copied all drafts for ${site.domain}`);
+  };
+
+  const handleDeleteWebsiteDrafts = async (site: WebsiteDraftGroup) => {
+    for (const d of site.drafts) {
+      await deleteSavedDraft(d.fieldKey);
+    }
+    const keysToRemove = new Set(site.drafts.map((d) => d.fieldKey));
+    setVaultDrafts((prev) => prev.filter((d) => !keysToRemove.has(d.fieldKey)));
+    showToast(`Removed all drafts for ${site.domain}`);
   };
 
   const handleAddDomain = async (e?: React.FormEvent) => {
@@ -181,48 +374,78 @@ export function Dashboard() {
 
   const handleExportBackup = async () => {
     try {
-      const jsonStr = await exportSettingsAndDrafts();
-      const blob = new Blob([jsonStr], { type: 'application/json' });
+      const meta = await exportSettingsAndDraftsWithMeta();
+      const blob = new Blob([meta.jsonStr], { type: 'application/json' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
-      const dateStr = new Date().toISOString().slice(0, 10);
+      const now = new Date();
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}`;
       a.href = url;
       a.download = `zenweb-backup-${dateStr}.json`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      showToast('Exported ZenWeb backup JSON');
+
+      const itemsDesc = meta.totalDrafts > 0 ? `${meta.totalDrafts} drafts` : 'settings';
+      showToast(`Exported snapshot (${itemsDesc}, ${meta.totalExclusions} exclusions)`);
     } catch (err) {
       console.error('Export failed:', err);
       showToast('Failed to export backup');
     }
   };
 
+  const processImportFile = async (file: File) => {
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith('.json') && file.type && !file.type.includes('json')) {
+      showToast('Please select a valid JSON backup file (.json)');
+      return;
+    }
+
+    setIsImporting(true);
+    try {
+      const content = await file.text();
+      const res = await importSettingsAndDrafts(content);
+
+      if (res.success) {
+        const [freshSettings, freshStats, freshDrafts] = await Promise.all([
+          getSettings(),
+          getStats(),
+          getAllSavedDrafts(),
+        ]);
+
+        setSettings(freshSettings);
+        setStats(freshStats);
+        setVaultDrafts(freshDrafts);
+
+        const parts: string[] = [];
+        if (res.draftsRestoredCount > 0) parts.push(`${res.draftsRestoredCount} drafts`);
+        if (res.whitelistedDomainsCount > 0) parts.push(`${res.whitelistedDomainsCount} exclusions`);
+        if (res.settingsRestored) parts.push('shields');
+
+        showToast(
+          parts.length > 0
+            ? `Restored: ${parts.join(', ')}!`
+            : 'Backup restored successfully!'
+        );
+      } else {
+        showToast(res.error || 'Invalid backup file format');
+      }
+    } catch (err: any) {
+      console.error('Import error:', err);
+      showToast(err?.message || 'Error reading backup file');
+    } finally {
+      setIsImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  };
+
   const handleImportBackup = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
-    try {
-      const reader = new FileReader();
-      reader.onload = async (event) => {
-        const content = event.target?.result as string;
-        if (!content) return;
-        const success = await importSettingsAndDrafts(content);
-        if (success) {
-          const [freshSettings, freshStats] = await Promise.all([getSettings(), getStats()]);
-          setSettings(freshSettings);
-          setStats(freshStats);
-          showToast('Backup restored successfully!');
-        } else {
-          showToast('Invalid backup file format');
-        }
-        if (fileInputRef.current) fileInputRef.current.value = '';
-      };
-      reader.readAsText(file);
-    } catch (err) {
-      console.error('Import error:', err);
-      showToast('Error importing file');
-      if (fileInputRef.current) fileInputRef.current.value = '';
+    if (file) {
+      await processImportFile(file);
     }
   };
 
@@ -243,8 +466,12 @@ export function Dashboard() {
     document.body.style.backgroundColor = '#000000';
 
     async function load() {
-      const [s, st] = await Promise.all([getSettings(), getStats()]);
-      startTransition(() => { setSettings(s); setStats(st); });
+      const [s, st, d] = await Promise.all([getSettings(), getStats(), getAllSavedDrafts()]);
+      startTransition(() => {
+        setSettings(s);
+        setStats(st);
+        setVaultDrafts(d);
+      });
     }
     load();
     onSettingsChange(setSettings);
@@ -620,23 +847,35 @@ export function Dashboard() {
                   className="apple-card flex flex-col justify-between gap-5 p-6"
                   style={{ opacity: isActive ? 1 : 0.56, transition: 'opacity 0.25s ease, background-color 0.35s, border-color 0.35s' }}
                 >
-                  <div className="flex flex-col gap-2.5">
-                    <div className="flex items-center justify-between">
-                      <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: cv('--zw-text-link') }}>
-                        {item.categoryLabel}
-                      </span>
-                      <span className="rounded-full px-2 py-0.5" style={{ fontSize: 11, color: cv('--zw-text-muted-badge'), backgroundColor: cv('--zw-bg-scope'), border: `1px solid ${cv('--zw-border-scope')}` }}>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div
+                          className="flex shrink-0 items-center justify-center rounded-[10px]"
+                          style={{
+                            width: 36,
+                            height: 36,
+                            backgroundColor: cv('--zw-bg-icon'),
+                            border: `1px solid ${cv('--zw-border-card')}`,
+                          }}
+                        >
+                          <Icon style={{ width: 17, height: 17, strokeWidth: 2, color: cv('--zw-text-primary') } as React.CSSProperties} />
+                        </div>
+                        <h3 className="apple-body-strong truncate" style={{ margin: 0, color: cv('--zw-text-primary') }}>
+                          {item.name}
+                        </h3>
+                      </div>
+                      <span
+                        className="shrink-0 rounded-full px-2.5 py-0.5"
+                        style={{
+                          fontSize: 11,
+                          color: cv('--zw-text-muted-badge'),
+                          backgroundColor: cv('--zw-bg-scope'),
+                          border: `1px solid ${cv('--zw-border-scope')}`,
+                        }}
+                      >
                         {item.targetScope}
                       </span>
-                    </div>
-
-                    <div className="flex items-center gap-3">
-                      <div className="flex shrink-0 items-center justify-center rounded-[10px]" style={{ width: 36, height: 36, backgroundColor: cv('--zw-bg-icon'), border: `1px solid ${cv('--zw-border-card')}` }}>
-                        <Icon style={{ width: 17, height: 17, strokeWidth: 2, color: cv('--zw-text-primary') } as React.CSSProperties} />
-                      </div>
-                      <h3 className="apple-body-strong" style={{ margin: 0, color: cv('--zw-text-primary') }}>
-                        {item.name}
-                      </h3>
                     </div>
 
                     <p style={{ fontSize: 14, color: cv('--zw-text-secondary'), lineHeight: 1.43, margin: 0 }}>
@@ -644,28 +883,51 @@ export function Dashboard() {
                     </p>
 
                     {item.key === 'formSalvagerEnabled' && (
-                      <button
-                        type="button"
-                        onClick={handleOpenVault}
-                        className="apple-press inline-flex items-center gap-1.5 self-start rounded-full px-3 py-1 mt-1"
-                        style={{
-                          fontSize: 12,
-                          fontWeight: 500,
-                          color: '#0891b2',
-                          backgroundColor: 'rgba(6, 182, 212, 0.12)',
-                          border: '1px solid rgba(6, 182, 212, 0.25)',
-                          cursor: 'pointer',
-                        }}
-                      >
-                        <Archive style={{ width: 12, height: 12 }} />
-                        Saved Drafts Vault
-                      </button>
+                      <div className="flex items-center gap-2.5 mt-1">
+                        <button
+                          type="button"
+                          onClick={handleOpenVault}
+                          className="apple-press inline-flex items-center gap-1.5 text-xs sm:text-[13px] font-semibold text-[#15803d] hover:text-[#4ade80] transition-colors"
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            padding: 0,
+                            cursor: 'pointer',
+                          }}
+                        >
+                          <Archive style={{ width: 13, height: 13 }} />
+                          <span>Saved Drafts Vault</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={handleOpenVault}
+                          className="apple-press inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold text-white transition-opacity hover:opacity-90"
+                          style={{
+                            backgroundColor: '#15803d',
+                            border: 'none',
+                            cursor: 'pointer',
+                          }}
+                          title="Open Saved Drafts Vault"
+                          aria-label="Open Saved Drafts Vault"
+                        >
+                          <span>Open</span>
+                          <ExternalLink style={{ width: 10, height: 10 }} />
+                        </button>
+                      </div>
                     )}
                   </div>
 
                   <div className="flex items-center justify-between pt-4" style={{ borderTop: `1px solid ${cv('--zw-border-divider')}` }}>
                     <div className="flex items-center gap-1.5" style={{ fontSize: 12, color: cv('--zw-text-tertiary') }}>
-                      <span className="inline-block rounded-full bg-[#34c759]" style={{ width: 6, height: 6 }} />
+                      <span
+                        className="inline-block rounded-full transition-colors duration-200"
+                        style={{
+                          width: 6,
+                          height: 6,
+                          backgroundColor: isActive ? '#34c759' : '#ef4444',
+                        }}
+                      />
                       <strong style={{ fontWeight: 600, color: cv('--zw-text-primary') }}>
                         <AnimatedNumber value={stats[item.statKey]} />
                       </strong>
@@ -794,78 +1056,154 @@ export function Dashboard() {
         {/* ── Backup & Shortcuts ────────────────────────── */}
         <section data-block className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Card 1: Backup & Migration */}
-          <div className="apple-card p-6 flex flex-col justify-between gap-5">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: cv('--zw-text-link') }}>
-                  Data Portability
-                </span>
-                <span className="rounded-full px-2 py-0.5 text-xs font-semibold" style={{ color: '#0891b2', backgroundColor: 'rgba(6, 182, 212, 0.12)' }}>
+          <div
+            className={`apple-card p-6 flex flex-col justify-between gap-5 transition-all duration-200 ${
+              isDraggingBackup
+                ? 'border-dashed border-2 !border-[#15803d] !bg-[rgba(21,128,61,0.08)]'
+                : ''
+            }`}
+            onDragOver={(e) => {
+              e.preventDefault();
+              setIsDraggingBackup(true);
+            }}
+            onDragLeave={(e) => {
+              e.preventDefault();
+              setIsDraggingBackup(false);
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              setIsDraggingBackup(false);
+              const file = e.dataTransfer.files?.[0];
+              if (file) {
+                processImportFile(file);
+              }
+            }}
+          >
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className="flex shrink-0 items-center justify-center rounded-[10px]"
+                    style={{
+                      width: 36,
+                      height: 36,
+                      backgroundColor: cv('--zw-bg-icon'),
+                      border: `1px solid ${cv('--zw-border-card')}`,
+                    }}
+                  >
+                    <Archive style={{ width: 17, height: 17, color: '#15803d' }} />
+                  </div>
+                  <h3 className="apple-body-strong truncate" style={{ margin: 0, color: cv('--zw-text-primary') }}>
+                    Backup &amp; Migration
+                  </h3>
+                </div>
+                <span
+                  className="shrink-0 rounded-full px-2.5 py-0.5 text-xs font-semibold"
+                  style={{
+                    color: '#15803d',
+                    backgroundColor: 'rgba(21, 128, 61, 0.15)',
+                  }}
+                >
                   JSON Backup
                 </span>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="flex shrink-0 items-center justify-center rounded-[10px]" style={{ width: 36, height: 36, backgroundColor: cv('--zw-bg-icon'), border: `1px solid ${cv('--zw-border-card')}` }}>
-                  <Archive style={{ width: 17, height: 17, color: cv('--zw-text-primary') }} />
-                </div>
-                <h3 className="apple-body-strong" style={{ margin: 0, color: cv('--zw-text-primary') }}>
-                  Backup &amp; Migration
-                </h3>
               </div>
               <p style={{ fontSize: 14, color: cv('--zw-text-secondary'), lineHeight: 1.43, margin: 0 }}>
                 Export your complete settings, domain exclusion lists, and saved form drafts into an offline JSON snapshot.
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3 pt-4" style={{ borderTop: `1px solid ${cv('--zw-border-divider')}` }}>
-              <button
-                type="button"
-                onClick={handleExportBackup}
-                className="apple-press inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] text-xs font-semibold text-white"
-                style={{ backgroundColor: cv('--zw-text-link'), border: 'none', cursor: 'pointer' }}
-              >
-                <Download style={{ width: 14, height: 14 }} />
-                <span>Export Backup</span>
-              </button>
+            <div className="flex flex-col gap-3 pt-4" style={{ borderTop: `1px solid ${cv('--zw-border-divider')}` }}>
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={handleExportBackup}
+                  className="apple-press inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] text-xs font-semibold text-white"
+                  style={{ backgroundColor: cv('--zw-text-link'), border: 'none', cursor: 'pointer' }}
+                >
+                  <Download style={{ width: 14, height: 14 }} />
+                  <span>Export Backup</span>
+                </button>
 
-              <label
-                className="apple-press inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] text-xs font-medium cursor-pointer"
-                style={{
-                  backgroundColor: cv('--zw-bg-scope'),
-                  border: `1px solid ${cv('--zw-border-card')}`,
-                  color: cv('--zw-text-primary'),
-                }}
-              >
-                <Upload style={{ width: 14, height: 14, color: cv('--zw-text-secondary') }} />
-                <span>Import Backup</span>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".json"
-                  onChange={handleImportBackup}
-                  className="hidden"
-                />
-              </label>
+                <label
+                  className={`apple-press inline-flex items-center gap-1.5 px-3.5 py-2 rounded-[10px] text-xs font-medium cursor-pointer transition-opacity ${
+                    isImporting ? 'opacity-60 pointer-events-none' : ''
+                  }`}
+                  style={{
+                    backgroundColor: cv('--zw-bg-scope'),
+                    border: `1px solid ${cv('--zw-border-card')}`,
+                    color: cv('--zw-text-primary'),
+                  }}
+                >
+                  <Upload style={{ width: 14, height: 14, color: cv('--zw-text-secondary') }} />
+                  <span>{isImporting ? 'Restoring...' : 'Import Backup'}</span>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept=".json,application/json"
+                    onChange={handleImportBackup}
+                    disabled={isImporting}
+                    className="hidden"
+                  />
+                </label>
+              </div>
+
+              <div className="text-[11px] font-medium flex items-center gap-1.5" style={{ color: cv('--zw-text-tertiary') }}>
+                <span>Stored:</span>
+                <span className="text-[#4ade80] font-semibold">{vaultDrafts.length} checkpoints</span>
+                <span>·</span>
+                <span>{settings.whitelistedDomains?.length || 0} exclusions</span>
+                <span>·</span>
+                <span>Drop JSON file to restore</span>
+              </div>
             </div>
           </div>
 
           {/* Card 2: Keyboard Shortcuts Guide */}
           <div className="apple-card p-6 flex flex-col justify-between gap-5">
-            <div className="flex flex-col gap-2">
-              <div className="flex items-center justify-between">
-                <span style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.04em', textTransform: 'uppercase', color: cv('--zw-text-link') }}>
-                  Power User
-                </span>
-                <div className="flex items-center gap-1.5">
-                  <div className="inline-flex rounded-full p-0.5" style={{ backgroundColor: cv('--zw-bg-scope'), border: `1px solid ${cv('--zw-border-scope')}` }}>
+            <div className="flex flex-col gap-3">
+              <div className="flex items-center justify-between gap-3">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div
+                    className="flex shrink-0 items-center justify-center rounded-[10px]"
+                    style={{
+                      width: 36,
+                      height: 36,
+                      backgroundColor: cv('--zw-bg-icon'),
+                      border: `1px solid ${cv('--zw-border-card')}`,
+                    }}
+                  >
+                    <Command style={{ width: 17, height: 17, color: cv('--zw-text-primary') }} />
+                  </div>
+                  <h3 className="apple-body-strong truncate" style={{ margin: 0, color: cv('--zw-text-primary') }}>
+                    Keyboard Shortcuts
+                  </h3>
+                </div>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  <div
+                    className="relative inline-flex items-center rounded-full p-0.5 select-none w-36"
+                    style={{
+                      backgroundColor: 'rgba(0, 0, 0, 0.45)',
+                      border: `1px solid ${cv('--zw-border-scope')}`,
+                    }}
+                  >
+                    {/* Animated Slider Indicator */}
+                    <div
+                      className="absolute top-0.5 bottom-0.5 rounded-full transition-transform duration-200 ease-out pointer-events-none"
+                      style={{
+                        width: 'calc(50% - 2px)',
+                        left: 2,
+                        transform: shortcutOS === 'mac' ? 'translateX(0%)' : 'translateX(100%)',
+                        backgroundColor: cv('--zw-bg-chip-sel'),
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.4), inset 0 1px 0 rgba(255,255,255,0.12)',
+                      }}
+                    />
+
                     <button
                       type="button"
                       onClick={() => setShortcutOS('mac')}
-                      className="px-2 py-0.5 rounded-full text-[11px] font-semibold transition-all cursor-pointer"
+                      className="relative z-10 flex-1 text-center py-1 rounded-full text-[11px] font-semibold transition-colors duration-150 cursor-pointer outline-none focus:outline-none"
                       style={{
-                        backgroundColor: shortcutOS === 'mac' ? cv('--zw-bg-surface') : 'transparent',
-                        color: shortcutOS === 'mac' ? cv('--zw-text-primary') : cv('--zw-text-secondary'),
-                        boxShadow: shortcutOS === 'mac' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                        color: shortcutOS === 'mac' ? cv('--zw-text-primary') : cv('--zw-text-tertiary'),
                       }}
                       title="Display keyboard shortcuts formatted for macOS keyboards"
                     >
@@ -874,11 +1212,9 @@ export function Dashboard() {
                     <button
                       type="button"
                       onClick={() => setShortcutOS('win')}
-                      className="px-2 py-0.5 rounded-full text-[11px] font-semibold transition-all cursor-pointer"
+                      className="relative z-10 flex-1 text-center py-1 rounded-full text-[11px] font-semibold transition-colors duration-150 cursor-pointer outline-none focus:outline-none"
                       style={{
-                        backgroundColor: shortcutOS === 'win' ? cv('--zw-bg-surface') : 'transparent',
-                        color: shortcutOS === 'win' ? cv('--zw-text-primary') : cv('--zw-text-secondary'),
-                        boxShadow: shortcutOS === 'win' ? '0 1px 2px rgba(0,0,0,0.06)' : 'none',
+                        color: shortcutOS === 'win' ? cv('--zw-text-primary') : cv('--zw-text-tertiary'),
                       }}
                       title="Display keyboard shortcuts formatted for Windows & Linux keyboards"
                     >
@@ -889,14 +1225,6 @@ export function Dashboard() {
                     Hotkeys
                   </span>
                 </div>
-              </div>
-              <div className="flex items-center gap-3">
-                <div className="flex shrink-0 items-center justify-center rounded-[10px]" style={{ width: 36, height: 36, backgroundColor: cv('--zw-bg-icon'), border: `1px solid ${cv('--zw-border-card')}` }}>
-                  <Command style={{ width: 17, height: 17, color: cv('--zw-text-primary') }} />
-                </div>
-                <h3 className="apple-body-strong" style={{ margin: 0, color: cv('--zw-text-primary') }}>
-                  Keyboard Shortcuts
-                </h3>
               </div>
               <p style={{ fontSize: 14, color: cv('--zw-text-secondary'), lineHeight: 1.43, margin: 0 }}>
                 Trigger instant shields, bypass modal locks, and open clean reading modes from anywhere.
@@ -953,8 +1281,8 @@ export function Dashboard() {
         {/* ── Privacy notice ── */}
         <div data-scroll-reveal className="apple-card flex flex-col gap-4 p-6 sm:flex-row sm:items-center sm:justify-between">
           <div className="flex items-center gap-3.5">
-            <div className="flex shrink-0 items-center justify-center rounded-full" style={{ width: 40, height: 40, backgroundColor: cv('--zw-bg-privacy'), color: cv('--zw-text-privacy') }}>
-              <Lock style={{ width: 18, height: 18, strokeWidth: 2 }} />
+            <div className="flex shrink-0 items-center justify-center" style={{ color: '#15803d' }}>
+              <Lock style={{ width: 22, height: 22, strokeWidth: 2.2 }} />
             </div>
             <div>
               <p className="apple-body-strong" style={{ margin: 0, fontSize: 15, color: cv('--zw-text-primary') }}>
@@ -965,7 +1293,15 @@ export function Dashboard() {
               </p>
             </div>
           </div>
-          <span className="shrink-0 self-start rounded-full sm:self-auto" style={{ fontSize: 11, fontWeight: 600, color: cv('--zw-text-badge-privacy'), backgroundColor: cv('--zw-bg-privacy'), padding: '4px 12px' }}>
+          <span
+            className="shrink-0 self-start sm:self-auto font-semibold"
+            style={{
+              fontSize: 13,
+              fontWeight: 600,
+              color: '#15803d',
+              letterSpacing: '0.01em',
+            }}
+          >
             Local Only
           </span>
         </div>
@@ -985,17 +1321,9 @@ export function Dashboard() {
             }}
           >
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-              <div className="flex items-start gap-3.5">
-                <div
-                  className="flex shrink-0 items-center justify-center rounded-[10px]"
-                  style={{
-                    width: 40,
-                    height: 40,
-                    backgroundColor: cv('--zw-bg-privacy'),
-                    border: `1px solid ${cv('--zw-border-card')}`,
-                  }}
-                >
-                  <Heart style={{ width: 18, height: 18, strokeWidth: 2, color: '#ff2d55', fill: '#ff2d55' }} />
+              <div className="flex items-start gap-3">
+                <div className="flex shrink-0 items-center justify-center mt-0.5">
+                  <Heart style={{ width: 20, height: 20, strokeWidth: 2, color: '#ff2d55', fill: '#ff2d55' }} />
                 </div>
                 <div>
                   <h3
@@ -1133,112 +1461,392 @@ export function Dashboard() {
         </footer>
       </main>
 
-      {/* ── Saved Drafts Vault Modal ────────────────────── */}
+      {/* ── Saved Drafts Vault Modal (16:9 Widescreen) ──── */}
       {vaultOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-5 bg-black/75 backdrop-blur-md"
+          onClick={handleCloseVault}
+        >
           <div
-            className="apple-card flex flex-col w-full max-h-[85vh] rounded-[20px] p-6 shadow-2xl"
-            style={{ maxWidth: 640, backgroundColor: cv('--zw-bg-card'), border: `1px solid ${cv('--zw-border-card')}` }}
+            className="apple-card flex flex-col rounded-[24px] shadow-2xl overflow-hidden border"
+            style={{
+              width: 'min(96vw, calc((94vh - 20px) * 16 / 9), 1460px)',
+              aspectRatio: '16 / 9',
+              maxHeight: '94vh',
+              backgroundColor: cv('--zw-bg-card'),
+              borderColor: cv('--zw-border-card'),
+            }}
+            onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-4" style={{ borderBottom: `1px solid ${cv('--zw-border-divider')}` }}>
-              <div className="flex items-center gap-2.5">
-                <div className="flex items-center justify-center rounded-[10px] p-2 bg-cyan-500/10 text-cyan-600 dark:text-cyan-400">
-                  <Archive style={{ width: 18, height: 18 }} />
-                </div>
+            {/* ── Modal Header Bar ── */}
+            <div
+              className="flex items-center justify-between px-7 py-4.5 flex-shrink-0"
+              style={{ borderBottom: `1px solid ${cv('--zw-border-divider')}` }}
+            >
+              <div className="flex items-center gap-4">
+                <Archive style={{ width: 26, height: 26, color: '#15803d' }} />
                 <div>
-                  <h2 className="text-base font-semibold" style={{ color: cv('--zw-text-primary'), margin: 0 }}>
-                    Saved Drafts Vault
-                  </h2>
-                  <p className="text-xs" style={{ color: cv('--zw-text-secondary'), margin: 0 }}>
-                    Recover unsubmitted text checkpoints across all websites
+                  <div className="flex items-center gap-3">
+                    <h2 className="text-lg sm:text-xl font-bold tracking-tight" style={{ color: cv('--zw-text-primary'), margin: 0 }}>
+                      Saved Drafts Vault
+                    </h2>
+                    <span className="text-sm font-medium" style={{ color: cv('--zw-text-tertiary') }}>
+                      ({groupedWebsites.length} {groupedWebsites.length === 1 ? 'website' : 'websites'} · {vaultDrafts.length} {vaultDrafts.length === 1 ? 'draft' : 'drafts'})
+                    </span>
+                  </div>
+                  <p className="text-sm sm:text-[14px] mt-0.5" style={{ color: cv('--zw-text-secondary'), margin: 0 }}>
+                    Recover unsubmitted form checkpoints organized by website and form section
                   </p>
                 </div>
               </div>
-              <button
-                type="button"
-                onClick={() => setVaultOpen(false)}
-                className="apple-press rounded-full p-1.5 hover:bg-black/5 dark:hover:bg-white/10"
-                style={{ color: cv('--zw-text-tertiary') }}
-                aria-label="Close vault"
-              >
-                <X style={{ width: 18, height: 18 }} />
-              </button>
-            </div>
 
-            <div className="flex-1 overflow-y-auto py-4 flex flex-col gap-3">
-              {vaultDrafts.length === 0 ? (
-                <div className="py-12 text-center text-sm" style={{ color: cv('--zw-text-tertiary') }}>
-                  No saved drafts currently in storage.<br />
-                  <span className="text-xs">When you type on any site, ZenWeb checkpoints your text safely here.</span>
-                </div>
-              ) : (
-                vaultDrafts.map((d) => (
-                  <div
-                    key={d.fieldKey}
-                    className="p-4 rounded-[14px] flex flex-col gap-2.5 border"
-                    style={{
-                      backgroundColor: cv('--zw-bg-scope'),
-                      borderColor: cv('--zw-border-scope'),
-                    }}
-                  >
-                    <div className="flex items-center justify-between text-xs">
-                      <div className="flex items-center gap-2 font-medium truncate max-w-[340px]" style={{ color: cv('--zw-text-primary') }}>
-                        <span className="text-cyan-600 dark:text-cyan-400 font-semibold">{d.fieldLabel || 'Input Field'}</span>
-                        <span style={{ color: cv('--zw-text-tertiary') }}>•</span>
-                        <span className="truncate" style={{ color: cv('--zw-text-secondary') }}>
-                          {d.url.replace(/^https?:\/\//, '')}
-                        </span>
-                      </div>
-                      <span className="text-[11px]" style={{ color: cv('--zw-text-tertiary') }}>
-                        {d.wordCount} words
-                      </span>
-                    </div>
-
-                    <div
-                      className="p-2.5 rounded-[8px] text-xs font-mono max-h-24 overflow-y-auto"
+              <div className="flex items-center gap-5">
+                {vaultDrafts.length > 0 && (
+                  <div className="relative flex items-center">
+                    <Search
+                      style={{ width: 17, height: 17, color: cv('--zw-text-tertiary') }}
+                      className="absolute left-3.5 pointer-events-none"
+                    />
+                    <input
+                      type="text"
+                      value={vaultSearchQuery}
+                      onChange={(e) => setVaultSearchQuery(e.target.value)}
+                      placeholder="Search websites or fields..."
+                      className="pl-10 pr-9 py-2 text-sm sm:text-[15px] rounded-full outline-none transition-colors border"
                       style={{
-                        backgroundColor: cv('--zw-bg-card'),
-                        color: cv('--zw-text-secondary'),
-                        border: `1px solid ${cv('--zw-border-card')}`,
+                        backgroundColor: cv('--zw-bg-scope'),
+                        borderColor: cv('--zw-border-card'),
+                        color: cv('--zw-text-primary'),
+                        width: 290,
                       }}
-                    >
-                      {d.value}
-                    </div>
-
-                    <div className="flex items-center justify-between pt-1">
-                      <span className="text-[11px]" style={{ color: cv('--zw-text-tertiary') }}>
-                        Saved {new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                        {d.revisions && d.revisions.length > 0 && ` · ${d.revisions.length + 1} revisions`}
-                      </span>
-                      <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleCopyDraft(d.fieldKey, d.value)}
-                          className="apple-press inline-flex items-center gap-1 text-xs font-medium px-2.5 py-1 rounded-full text-cyan-600 bg-cyan-500/10 hover:bg-cyan-500/20"
-                        >
-                          <Copy style={{ width: 12, height: 12 }} />
-                          {copiedKey === d.fieldKey ? 'Copied!' : 'Copy Text'}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteDraft(d.fieldKey)}
-                          className="apple-press text-xs p-1 rounded-full hover:bg-red-500/10 text-red-500"
-                          title="Delete this draft"
-                        >
-                          <Trash2 style={{ width: 14, height: 14 }} />
-                        </button>
-                      </div>
-                    </div>
+                    />
+                    {vaultSearchQuery && (
+                      <button
+                        type="button"
+                        onClick={() => setVaultSearchQuery('')}
+                        className="absolute right-3 text-xs rounded-full p-1 hover:bg-white/10"
+                        style={{ color: cv('--zw-text-tertiary') }}
+                      >
+                        <X style={{ width: 15, height: 15 }} />
+                      </button>
+                    )}
                   </div>
-                ))
-              )}
+                )}
+
+                <button
+                  type="button"
+                  onClick={handleCloseVault}
+                  className="apple-press rounded-full p-2.5 hover:bg-white/10 transition-colors"
+                  style={{ color: cv('--zw-text-tertiary') }}
+                  aria-label="Close vault"
+                >
+                  <X style={{ width: 22, height: 22 }} />
+                </button>
+              </div>
             </div>
 
-            <div className="pt-3 border-t flex justify-end" style={{ borderColor: cv('--zw-border-divider') }}>
+            {/* ── Modal Body (Split Layout in 16:9) ── */}
+            {vaultDrafts.length === 0 ? (
+              <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+                <div className="flex items-center justify-center w-16 h-16 rounded-2xl bg-[#15803d]/10 text-[#15803d] mb-4 border border-[#15803d]/20">
+                  <Archive style={{ width: 32, height: 32 }} />
+                </div>
+                <h3 className="text-lg font-semibold" style={{ color: cv('--zw-text-primary') }}>
+                  No Saved Drafts in Storage
+                </h3>
+                <p className="text-sm max-w-sm mt-1.5" style={{ color: cv('--zw-text-secondary') }}>
+                  ZenWeb automatically checkpoints your text, textareas, and form selections across any website in real-time as you type.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleCloseVault}
+                  className="apple-press mt-5 text-sm font-medium px-5 py-2.5 rounded-full"
+                  style={{ backgroundColor: cv('--zw-bg-chip'), color: cv('--zw-text-primary') }}
+                >
+                  Close Vault
+                </button>
+              </div>
+            ) : (
+              <div className="flex-1 flex min-h-0 overflow-hidden">
+                {/* ── Left Sidebar: Websites List ── */}
+                <div
+                  className="w-[320px] lg:w-[360px] flex-shrink-0 flex flex-col border-r h-full overflow-hidden"
+                  style={{
+                    borderColor: cv('--zw-border-divider'),
+                    backgroundColor: 'rgba(0, 0, 0, 0.25)',
+                  }}
+                >
+                  <div
+                    className="px-5 py-3 text-[13px] font-semibold uppercase tracking-wider flex items-center justify-between"
+                    style={{ color: cv('--zw-text-tertiary'), borderBottom: `1px solid ${cv('--zw-border-divider')}` }}
+                  >
+                    <span>Websites ({filteredWebsites.length})</span>
+                    <span>Checkpoints</span>
+                  </div>
+
+                  <div className="flex-1 overflow-y-auto p-3 flex flex-col gap-2.5">
+                    {filteredWebsites.length === 0 ? (
+                      <div className="p-5 text-center text-sm" style={{ color: cv('--zw-text-tertiary') }}>
+                        No websites match "{vaultSearchQuery}"
+                      </div>
+                    ) : (
+                      filteredWebsites.map((site) => {
+                        const isSelected = site.domain === activeWebsiteDomain;
+                        return (
+                          <button
+                            key={site.domain}
+                            type="button"
+                            onClick={() => setSelectedWebsite(site.domain)}
+                            className="apple-press w-full text-left p-3.5 rounded-[16px] flex items-center justify-between transition-all outline-none focus:outline-none focus:ring-0 group"
+                            style={{
+                              backgroundColor: isSelected ? 'rgba(5, 46, 22, 0.75)' : 'transparent',
+                            }}
+                          >
+                            <div className="flex items-center gap-3.5 min-w-0 flex-1 mr-2.5">
+                              <WebsiteFavicon domain={site.domain} size={24} />
+                              <div className="min-w-0 flex-1">
+                                <div
+                                  className="text-[15px] sm:text-base font-semibold truncate"
+                                  style={{ color: isSelected ? '#4ade80' : cv('--zw-text-primary') }}
+                                >
+                                  <HighlightMatches text={site.domain} query={vaultSearchQuery} />
+                                </div>
+                                <div className="text-[13px] truncate mt-0.5" style={{ color: cv('--zw-text-tertiary') }}>
+                                  {site.sections.length} {site.sections.length === 1 ? 'section' : 'sections'} · {site.totalWords} words
+                                </div>
+                              </div>
+                            </div>
+
+                            <span
+                              className="px-3 py-1 rounded-full text-xs sm:text-[13px] font-bold flex-shrink-0"
+                              style={{
+                                backgroundColor: isSelected ? 'rgba(21, 128, 61, 0.28)' : cv('--zw-bg-scope'),
+                                color: isSelected ? '#4ade80' : cv('--zw-text-secondary'),
+                              }}
+                            >
+                              {site.drafts.length}
+                            </span>
+                          </button>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+
+                {/* ── Right Content Area: Form Sections & Fields ── */}
+                <div className="flex-1 h-full flex flex-col min-w-0 overflow-hidden">
+                  {activeSiteGroup ? (
+                    <>
+                      {/* Website Header Bar */}
+                      <div
+                        className="px-7 py-4 border-b flex items-center justify-between flex-shrink-0"
+                        style={{
+                          borderColor: cv('--zw-border-divider'),
+                          backgroundColor: 'rgba(255, 255, 255, 0.015)',
+                        }}
+                      >
+                        <div className="flex items-center gap-4 min-w-0">
+                          <WebsiteFavicon domain={activeSiteGroup.domain} size={26} />
+                          <div className="min-w-0 flex flex-col">
+                            <a
+                              href={activeSiteGroup.displayUrl?.startsWith('http') ? activeSiteGroup.displayUrl : `https://${activeSiteGroup.displayUrl || activeSiteGroup.domain}`}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="group inline-flex items-center gap-2 max-w-full hover:opacity-85 transition-opacity"
+                              title={`Open ${activeSiteGroup.domain}`}
+                            >
+                              <h3 className="text-lg sm:text-xl font-bold truncate group-hover:underline" style={{ color: cv('--zw-text-primary'), margin: 0 }}>
+                                <HighlightMatches text={activeSiteGroup.domain} query={vaultSearchQuery} />
+                              </h3>
+                              <ExternalLink style={{ width: 16, height: 16, color: '#15803d' }} className="flex-shrink-0" />
+                            </a>
+                            <span className="text-[13px] sm:text-sm block mt-0.5 font-medium" style={{ color: cv('--zw-text-tertiary') }}>
+                              {activeSiteGroup.sections.length} form {activeSiteGroup.sections.length === 1 ? 'section' : 'sections'} · {activeSiteGroup.drafts.length} saved fields
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-5">
+                          <button
+                            type="button"
+                            onClick={() => handleCopyWebsiteDrafts(activeSiteGroup)}
+                            className={`apple-press inline-flex items-center gap-2.5 text-[15px] sm:text-base font-semibold transition-colors duration-150 ${
+                              copiedKey === 'website_' + activeSiteGroup.domain
+                                ? 'text-[#34c759]'
+                                : 'text-[#15803d] hover:text-[#4ade80]'
+                            }`}
+                            title="Copy all form data"
+                            aria-label="Copy all form data"
+                          >
+                            {copiedKey === 'website_' + activeSiteGroup.domain ? (
+                              <>
+                                <Check style={{ width: 17, height: 17 }} />
+                                <span>Copied!</span>
+                              </>
+                            ) : (
+                              <>
+                                <Copy style={{ width: 17, height: 17 }} />
+                                <span>Copy All</span>
+                              </>
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteWebsiteDrafts(activeSiteGroup)}
+                            className="apple-press p-2.5 rounded-full text-[#b91c1c] hover:text-red-400 transition-colors"
+                            title="Delete all drafts for this website"
+                            aria-label="Delete all drafts for this website"
+                          >
+                            <Trash2 style={{ width: 18, height: 18 }} />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Scrollable Form Sections List */}
+                      <div className="flex-1 overflow-y-auto p-7 flex flex-col gap-6">
+                        {activeSiteGroup.sections.map((section) => (
+                          <div
+                            key={section.sectionId}
+                            className="rounded-[20px] border p-6 flex flex-col gap-5"
+                            style={{
+                              backgroundColor: cv('--zw-bg-scope'),
+                              borderColor: cv('--zw-border-scope'),
+                            }}
+                          >
+                            {/* Section Header */}
+                            <div className="flex items-center justify-between pb-3.5 border-b" style={{ borderColor: cv('--zw-border-divider') }}>
+                              <div className="flex items-center gap-3">
+                                <Layers style={{ width: 18, height: 18, color: '#15803d' }} />
+                                <span className="text-base sm:text-lg font-bold text-[#15803d]">
+                                  <HighlightMatches text={section.formName} query={vaultSearchQuery} />
+                                </span>
+                                <span className="text-xs sm:text-[13px] px-3 py-1 rounded-full font-semibold" style={{ backgroundColor: cv('--zw-bg-card'), color: cv('--zw-text-tertiary') }}>
+                                  {section.drafts.length} {section.drafts.length === 1 ? 'field' : 'fields'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {/* Section Fields Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4.5">
+                              {section.drafts.map((d) => (
+                                <div
+                                  key={d.fieldKey}
+                                  className="p-5 rounded-[16px] flex flex-col justify-between gap-3.5 border"
+                                  style={{
+                                    backgroundColor: cv('--zw-bg-card'),
+                                    borderColor: cv('--zw-border-card'),
+                                  }}
+                                >
+                                  <div className="flex items-center justify-between text-[15px] sm:text-base">
+                                    <span className="font-bold text-[#15803d] truncate max-w-[240px]">
+                                      <HighlightMatches text={d.fieldLabel || 'Input Field'} query={vaultSearchQuery} />
+                                    </span>
+                                    <span className="text-xs sm:text-[13px] font-medium" style={{ color: cv('--zw-text-tertiary') }}>
+                                      {d.wordCount} words
+                                    </span>
+                                  </div>
+
+                                  <div
+                                    className="p-3.5 sm:p-4 rounded-[10px] text-[15px] sm:text-base font-mono max-h-36 overflow-y-auto break-words whitespace-pre-wrap select-all"
+                                    style={{
+                                      backgroundColor: 'rgba(0, 0, 0, 0.45)',
+                                      color: cv('--zw-text-primary'),
+                                      border: `1px solid ${cv('--zw-border-divider')}`,
+                                      lineHeight: 1.55,
+                                    }}
+                                  >
+                                    <HighlightMatches text={d.value} query={vaultSearchQuery} />
+                                  </div>
+
+                                  <div className="flex items-center justify-between pt-1">
+                                    <span className="text-xs sm:text-[13px] font-medium" style={{ color: cv('--zw-text-tertiary') }}>
+                                      {new Date(d.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                      {d.revisions && d.revisions.length > 0 && ` · rev ${d.revisions.length + 1}`}
+                                    </span>
+
+                                    <div className="flex items-center gap-2.5">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleCopyDraft(d.fieldKey, d.value)}
+                                        className="apple-press p-2 rounded-full hover:bg-white/10 transition-colors"
+                                        style={{ color: copiedKey === d.fieldKey ? '#34c759' : cv('--zw-text-secondary') }}
+                                        title="Copy text"
+                                        aria-label="Copy text"
+                                      >
+                                        {copiedKey === d.fieldKey ? (
+                                          <Check style={{ width: 16, height: 16, color: '#34c759' }} />
+                                        ) : (
+                                          <Copy style={{ width: 16, height: 16 }} />
+                                        )}
+                                      </button>
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteDraft(d.fieldKey)}
+                                        className="apple-press p-2 rounded-full text-[#b91c1c] hover:text-red-400 transition-colors"
+                                        title="Delete field draft"
+                                        aria-label="Delete field draft"
+                                      >
+                                        <Trash2 style={{ width: 16, height: 16 }} />
+                                      </button>
+                                    </div>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  ) : (
+                    <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+                      {vaultSearchQuery.trim() ? (
+                        <>
+                          <div className="flex items-center justify-center w-12 h-12 rounded-full bg-white/5 text-[#15803d] mb-3">
+                            <Search style={{ width: 22, height: 22 }} />
+                          </div>
+                          <h4 className="text-base font-semibold" style={{ color: cv('--zw-text-primary') }}>
+                            No Checkpoints Found
+                          </h4>
+                          <p className="text-sm mt-1 max-w-sm" style={{ color: cv('--zw-text-secondary') }}>
+                            No saved drafts match &ldquo;<span className="text-[#4ade80] font-medium">{vaultSearchQuery}</span>&rdquo;. Try searching for a different website, form section, or field value.
+                          </p>
+                          <button
+                            type="button"
+                            onClick={() => setVaultSearchQuery('')}
+                            className="apple-press mt-4 text-xs sm:text-sm font-semibold px-4 py-2 rounded-full"
+                            style={{ backgroundColor: cv('--zw-bg-chip'), color: cv('--zw-text-primary') }}
+                          >
+                            Clear Search
+                          </button>
+                        </>
+                      ) : (
+                        <p className="text-base" style={{ color: cv('--zw-text-tertiary') }}>
+                          Select a website from the sidebar to view saved drafts.
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* ── Modal Footer Bar ── */}
+            <div
+              className="px-7 py-4 border-t flex items-center justify-between flex-shrink-0"
+              style={{
+                borderColor: cv('--zw-border-divider'),
+                backgroundColor: 'rgba(0, 0, 0, 0.25)',
+              }}
+            >
+              <div className="flex items-center gap-2.5 text-xs sm:text-sm font-medium" style={{ color: cv('--zw-text-tertiary') }}>
+                <Lock style={{ width: 16, height: 16, color: '#34c759' }} />
+                <span>Zero Server Uploads · 100% Client-Side Local Checkpoints</span>
+              </div>
+
               <button
                 type="button"
-                onClick={() => setVaultOpen(false)}
-                className="apple-press text-xs font-medium px-4 py-2 rounded-full"
+                onClick={handleCloseVault}
+                className="apple-press text-sm sm:text-base font-semibold px-6 py-2.5 rounded-full transition-all"
                 style={{ backgroundColor: cv('--zw-bg-chip'), color: cv('--zw-text-primary') }}
               >
                 Close Vault
