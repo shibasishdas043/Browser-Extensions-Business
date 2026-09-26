@@ -1,17 +1,23 @@
 import { defineConfig, Plugin, build as viteBuild } from 'vite';
 import { fileURLToPath } from 'node:url';
-import { copyFileSync, readdirSync } from 'node:fs';
+import { copyFileSync, readdirSync, cpSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 
-function copyManifestPlugin(): Plugin {
+function copyAssetsPlugin(): Plugin {
   return {
-    name: 'copy-manifest',
+    name: 'copy-assets',
     closeBundle() {
       const src = fileURLToPath(new URL('./manifest.json', import.meta.url));
       const dest = fileURLToPath(new URL('./dist/manifest.json', import.meta.url));
       copyFileSync(src, dest);
+
+      const fontsSrc = fileURLToPath(new URL('./assets/fonts', import.meta.url));
+      const fontsDest = fileURLToPath(new URL('./dist/assets/fonts', import.meta.url));
+      if (existsSync(fontsSrc)) {
+        cpSync(fontsSrc, fontsDest, { recursive: true });
+      }
     },
   };
 }
@@ -93,7 +99,7 @@ function buildContentScriptPlugin(): Plugin {
 
 export default defineConfig({
   base: '',
-  plugins: [react(), tailwindcss(), copyManifestPlugin(), removeCrossoriginPlugin(), buildContentScriptPlugin()],
+  plugins: [react(), tailwindcss(), copyAssetsPlugin(), removeCrossoriginPlugin(), buildContentScriptPlugin()],
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./', import.meta.url)),

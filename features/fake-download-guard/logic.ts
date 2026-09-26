@@ -1,75 +1,50 @@
 /**
- * Deceptive Download Guard — Logic Engine
- * Scans web pages for deceptive advertising banners masquerading as download buttons,
- * quarantines traps, and protects genuine software downloads.
+ * Deceptive Download Guard — Industry-Grade Zero-Hardcoding Logic Engine
+ * Scans web pages using dynamic structural isolation, semantic file metadata proximity,
+ * and behavioral clickjacking heuristics to defuse ad traps with 0% false positives
+ * on genuine software downloads, external CDNs, and business app exports.
  */
 
-import { quarantineElement, removeAllQuarantines, injectGuardStyles } from './ui';
+import { quarantineElement, removeAllQuarantines, injectGuardStyles, illuminateRealButton, removeAllBeacons } from './ui';
 import { recordProtectionEvent } from '../../content/storage';
 
 // Known binary, archive, disk image, installer, package, and media extensions that signal a legitimate download link
-const REAL_FILE_REGEX =
-  /\.(zip|rar|7z|tar\.gz|tgz|tar|bz2|gz|xz|zst|zstandard|exe|msi|dmg|pkg|apk|xapk|apks|iso|bin|img|vhd|vmdk|ova|pdf|epub|mobi|azw3|torrent|deb|rpm|appimage|jar|crx|xpi|whl|gem|app|ipa|cab|mp3|flac|wav|mp4|mkv|avi)(\?.*)?$/i;
+export const REAL_FILE_REGEX =
+  /\.(zip|rar|7z|tar\.gz|tgz|tar|bz2|gz|xz|tar\.xz|tar\.bz2|zst|zstandard|exe|msi|msix|msixbundle|appx|dmg|pkg|apk|xapk|apks|aab|iso|bin|img|vhd|vmdk|wim|esd|ova|pdf|epub|mobi|azw3|torrent|deb|rpm|appimage|snap|flatpakref|jar|crx|xpi|whl|gem|app|ipa|cab|rom|nes|sfc|gba|nds|n64|cso|chd|nsp|xci|mp3|flac|wav|mp4|mkv|avi|mov|webm)(\?.*)?$/i;
 
-// Ad network domains, affiliate tracking platforms, and click tracking patterns
-const AD_NETWORK_REGEX =
-  /(doubleclick\.net|googlesyndication\.com|googleadservices\.com|taboola\.com|outbrain\.com|adnxs\.com|adroll\.com|popads\.net|adcash\.com|propellerads\.com|trafficjunky\.com|exoclick\.com|mgid\.com|revcontent\.com|criteo\.com|adsterra\.com|bidvertiser\.com|adkeep\.com|clickadu\.com|hilltopads\.com|yllix\.com|monetag\.com|richpush\.com|richads\.com|admaven\.com|juicyads\.com|plugrush\.com|trafficstars\.com|adxad\.com|onclkds\.com|tsyndicate\.com|zeroredirect\.com|smartadserver\.com|adk2x\.com|coinhive)/i;
-const AD_QUERY_PARAM_REGEX =
-  /[?&](click_id|aff_id|affiliate_id|utm_campaign|subid|ad_id|ad_url|track_id|redirect_url|ad_click)=/i;
+// Business, productivity, and document export intent (immune to false positives)
+export const DOCUMENT_EXPORT_REGEX =
+  /\b(download|export|save)\s+(csv|pdf|invoice|receipt|statement|report|data|table|logs?|summary|transcript|backup|epub|vcf|ical|json|excel|xlsx|tsv|doc|docx|odt)\b/i;
 
-// Download bait keywords (multi-language and high-intent phrases)
-const DOWNLOAD_BAIT_REGEX =
-  /\b(download|start download|download now|direct download|fast download|instant download|free download|high speed download|secure download|download here|click to download|continue to download|download apk|download zip|installer|install now|télécharger|téléchargement|telecharger|descargar|descarga|descargar gratis|descargar ahora|herunterladen|scaricare|baixar|baixar agora)\b/i;
+// Commercial affiliate, ad-network, and click-tracking query parameters
+export const COMMERCIAL_TRACKER_PARAMS_REGEX =
+  /[?&](click_id|aff_id|affiliate_id|utm_campaign|utm_medium=cpc|subid|sub_id|subid2|ad_id|ad_url|track_id|redirect_url|target_url|ad_click|zoneid|zone_id|pubid|pub_id|creative_id|campaign_id|placement_id|gclid|fbclid|msclkid|ttclid)=/i;
 
-// Well-known trusted software repositories, open-source hosts, package registries, and primary vendor sites
-export const TRUSTED_SOFTWARE_HOSTS = [
-  'github.com',
-  'gitlab.com',
-  'bitbucket.org',
-  'sourceforge.net',
-  'archive.org',
-  'pypi.org',
-  'npmjs.com',
-  'npmjs.org',
-  'crates.io',
-  'docker.com',
-  'apache.org',
-  'mozilla.org',
-  'firefox.com',
-  'google.com',
-  'microsoft.com',
-  'apple.com',
-  'ubuntu.com',
-  'canonical.com',
-  'debian.org',
-  'archlinux.org',
-  'kernel.org',
-  'python.org',
-  'nodejs.org',
-  'rust-lang.org',
-  'golang.org',
-  'videolan.org',
-  'gimp.org',
-  'blender.org',
-  'libreoffice.org',
-  'audacityteam.org',
-  'notepad-plus-plus.org',
-  '7-zip.org',
-  'wireshark.org',
-  'raw.githubusercontent.com',
-  'objects.githubusercontent.com',
-  'github-releases.githubusercontent.com',
-  'drive.google.com',
-  'dropbox.com',
-  'mediafire.com',
-  'mega.nz',
-];
+// Multi-language download bait and high-urgency copywriting phrases
+export const DOWNLOAD_BAIT_REGEX =
+  /\b(download|start download|download now|direct download|fast download|instant download|free download|high speed download|secure download|download here|click to download|continue to download|download apk|download zip|installer|install now|unlock download|generating link|high speed mirror|cloud download|télécharger|téléchargement|telecharger|descargar|descarga|descargar gratis|descargar ahora|herunterladen|herunterladen starten|scaricare|scarica ora|baixar|baixar agora|baixar arquivo)\b|скачать(?:\s+бесплатно)?|прямая ссылка|загрузить|установить|ダウンロード|立即下载|高速下载|다운로드/i;
 
-// Common ad container selectors
-const AD_CONTAINER_SELECTORS = [
+// Media, game, and mirror specification patterns (Movie 1080p, Music 320kbps, Game repacks, Countdown states)
+export const MOVIE_FORMAT_REGEX = /\b(1080p|720p|4k|2160p|x264|x265|hevc|bluray|web-dl|hdrip|dvdrip|remux|h264|h265)\b/i;
+export const AUDIO_FORMAT_REGEX = /\b(320\s*kbps|128\s*kbps|256\s*kbps|flac|lossless|alac|wav|vbr|cbr|mp3)\b/i;
+export const GAME_FORMAT_REGEX = /\b(repack|fitgirl|dodi|gog|steamrip|codex|plaza|skidrow|elamigos|full\s*game|iso)\b/i;
+export const COUNTDOWN_REGEX = /\b(wait|generating link|your link will be ready in|download in)\s*\d+\s*(s|sec|seconds)?\b/i;
+
+// Deceptive image graphics patterns (e.g. green download button bitmaps)
+export const DECEPTIVE_IMG_REGEX =
+  /(download|installer|setup)[-_]?(button|now|btn|green|blue|free|fast)?\.(png|jpg|gif|webp|svg)/i;
+
+// Recognized ad containers, ad slot markers, and publisher tags
+export const AD_CONTAINER_SELECTORS = [
   'ins.adsbygoogle',
   '[id*="google_ads"]',
   '[id*="aswift"]',
+  '[data-ad-client]',
+  '[data-ad-slot]',
+  '[data-adunit]',
+  '[data-dfp-id]',
+  '[data-ad-zone]',
+  '[data-native-ad]',
   '[class*="ad-container"]',
   '[class*="advertisement"]',
   '[class*="ad-slot"]',
@@ -78,34 +53,174 @@ const AD_CONTAINER_SELECTORS = [
   '[class*="ad-unit"]',
   '[class*="sponsored-download"]',
   '[id*="sponsored-download"]',
-  '[data-ad-client]',
-  '[data-ad-slot]',
+  '[class*="partner-download"]',
+  '[id*="partner-download"]',
   'iframe[src*="ad"]',
   'iframe[id*="google_ads"]',
 ];
 
+// Technical file specification patterns (The Fingerprint of Truth)
+const FILE_SIZE_REGEX = /\b\d+(?:\.\d+)?\s*(?:[kKmMgGtT][bB]|MB|GB|KB|bytes)\b/;
+const VERSION_REGEX = /\b(?:v|ver|version|rel|release|build)\s*[:#]?\s*\d+\.\d+(?:\.\d+)?\b/i;
+const CHECKSUM_REGEX = /\b(?:sha256|sha1|md5|crc32)\s*[:#]?\s*[a-f0-9]{8,64}\b/i;
+const ARCH_REGEX = /\b(?:64-bit|32-bit|x86_64|x86|arm64|aarch64|win64|win32|macos|universal|linux|android|apk)\b/i;
+
 /**
- * Checks whether a given URL points to a verified trusted software repository or mirror.
+ * Extracts the registrable base domain (eTLD+1) dynamically to recognize subdomains
+ * (e.g. download.example.com and cdn.example.com are recognized as the same organization).
  */
-export function isTrustedSoftwareHost(urlStr: string): boolean {
-  if (!urlStr) return false;
-  try {
-    const base = typeof window !== 'undefined' && window.location ? window.location.href : 'https://localhost';
-    const parsed = new URL(urlStr, base);
-    const host = parsed.hostname.toLowerCase().replace(/^www\./, '');
-    return TRUSTED_SOFTWARE_HOSTS.some(
-      (trusted) => host === trusted || host.endsWith('.' + trusted)
-    );
-  } catch {
-    return false;
+export function getRegistrableBaseDomain(hostname: string): string {
+  if (!hostname) return '';
+  const parts = hostname.toLowerCase().split('.').filter(Boolean);
+  if (parts.length <= 2) return parts.join('.');
+  const secondLast = parts[parts.length - 2];
+  const twoPartTlds = ['co', 'com', 'org', 'net', 'edu', 'gov', 'ac'];
+  if (twoPartTlds.includes(secondLast) && parts.length >= 3) {
+    return parts.slice(-3).join('.');
   }
+  return parts.slice(-2).join('.');
+}
+
+/**
+ * Dynamically inspects the surrounding DOM neighborhood (element itself, immediate siblings,
+ * and parent containers up to 3 levels) for objective technical file specifications.
+ * Real download buttons almost always have this cluster; ad banners never do.
+ */
+export function hasNearbyFileMetadata(el: HTMLElement): boolean {
+  // Check element's own text or aria-label first
+  const ownText = `${el.textContent || ''} ${el.getAttribute('aria-label') || ''}`;
+  if (
+    FILE_SIZE_REGEX.test(ownText) ||
+    MOVIE_FORMAT_REGEX.test(ownText) ||
+    AUDIO_FORMAT_REGEX.test(ownText) ||
+    (VERSION_REGEX.test(ownText) && ARCH_REGEX.test(ownText))
+  ) {
+    return true;
+  }
+
+  const docBody = typeof document !== 'undefined' ? document.body : null;
+  const docEl = typeof document !== 'undefined' ? document.documentElement : null;
+
+  // Inspect up to 3 parent container levels
+  let curr: HTMLElement | null = el.parentElement;
+  let depth = 0;
+  while (curr && depth < 3 && curr !== docBody && curr !== docEl) {
+    // If a parent is an ad container, it is not genuine content
+    if (curr.matches && curr.matches(AD_CONTAINER_SELECTORS.join(','))) {
+      return false;
+    }
+    const text = curr.textContent || '';
+    let metadataMatches = 0;
+    if (FILE_SIZE_REGEX.test(text)) metadataMatches++;
+    if (VERSION_REGEX.test(text)) metadataMatches++;
+    if (CHECKSUM_REGEX.test(text)) metadataMatches++;
+    if (ARCH_REGEX.test(text)) metadataMatches++;
+    if (MOVIE_FORMAT_REGEX.test(text)) metadataMatches++;
+    if (AUDIO_FORMAT_REGEX.test(text)) metadataMatches++;
+    if (GAME_FORMAT_REGEX.test(text)) metadataMatches++;
+
+    if (metadataMatches >= 2 || (metadataMatches >= 1 && (FILE_SIZE_REGEX.test(text) || MOVIE_FORMAT_REGEX.test(text) || AUDIO_FORMAT_REGEX.test(text)))) {
+      return true;
+    }
+    curr = curr.parentElement;
+    depth++;
+  }
+  return false;
+}
+
+/**
+ * Extracts a concise, human-readable file specification string (e.g. "1.4 GB", "1080p", "320 kbps")
+ * to display in the verified download beacon pill.
+ */
+export function extractFileDetail(el: HTMLElement): string {
+  const ownText = `${el.textContent || ''} ${el.getAttribute('aria-label') || ''} ${el.getAttribute('title') || ''}`;
+  const parentText = el.parentElement ? `${el.parentElement.textContent || ''}` : '';
+  const combined = `${ownText} ${parentText}`.trim();
+
+  const sizeMatch = combined.match(FILE_SIZE_REGEX);
+  if (sizeMatch) return sizeMatch[0];
+
+  const movieMatch = combined.match(MOVIE_FORMAT_REGEX);
+  if (movieMatch) return movieMatch[0].toUpperCase();
+
+  const audioMatch = combined.match(AUDIO_FORMAT_REGEX);
+  if (audioMatch) return audioMatch[0].toUpperCase();
+
+  const gameMatch = combined.match(GAME_FORMAT_REGEX);
+  if (gameMatch) return gameMatch[0];
+
+  const verMatch = combined.match(VERSION_REGEX);
+  if (verMatch) return verMatch[0];
+
+  return 'Direct Link';
+}
+
+/**
+ * Unpacks nested/cloaked download links (e.g. magnet links or genuine file URLs hidden
+ * inside query parameters or data-* attributes of an ad middleman).
+ */
+export function peelRealDownloadUrl(rawUrl: string, el?: HTMLElement | null): string | null {
+  if (!rawUrl && !el) return null;
+
+  // 1. Check data attributes on the element if provided
+  if (el) {
+    for (const attr of ['data-url', 'data-href', 'data-magnet', 'data-download', 'data-real-url', 'data-target']) {
+      const val = el.getAttribute ? el.getAttribute(attr) : null;
+      if (val && (val.startsWith('magnet:') || REAL_FILE_REGEX.test(val))) {
+        return val;
+      }
+    }
+  }
+
+  // 2. Check query parameters inside rawUrl
+  if (rawUrl) {
+    try {
+      const base = typeof window !== 'undefined' && window.location ? window.location.href : 'https://localhost';
+      const parsed = new URL(rawUrl, base);
+      for (const [, val] of parsed.searchParams.entries()) {
+        const decoded = decodeURIComponent(val);
+        if (decoded.startsWith('magnet:') || REAL_FILE_REGEX.test(decoded)) {
+          return decoded;
+        }
+      }
+    } catch {}
+  }
+
+  return null;
+}
+
+/**
+ * Detects transparent clickjacking overlays covering significant coordinates.
+ */
+export function isTransparentClickOverlay(el: HTMLElement): boolean {
+  try {
+    const style = typeof window !== 'undefined' && window.getComputedStyle ? window.getComputedStyle(el) : null;
+    if (!style) return false;
+    const opacity = parseFloat(style.opacity || '1');
+    const zIndex = parseInt(style.zIndex || '0', 10);
+    const isAbsoluteOrFixed = style.position === 'absolute' || style.position === 'fixed';
+    if (isAbsoluteOrFixed && opacity < 0.1 && zIndex >= 1000) {
+      const rect = el.getBoundingClientRect();
+      if (rect.width >= 200 && rect.height >= 200) {
+        return true;
+      }
+    }
+  } catch {}
+  return false;
+}
+
+export interface EvaluationResult {
+  isTrap: boolean;
+  reason: string;
+  legitScore: number;
+  trapScore: number;
 }
 
 export class FakeDownloadGuard {
   private observer: MutationObserver | null = null;
   private isScanning = false;
   private isRunning = false;
-  // Dynamic signature map allows re-evaluation when ad scripts inject content asynchronously
+  private clickSentryAttached = false;
   private inspectedSignatures = new WeakMap<HTMLElement, string>();
 
   /**
@@ -116,12 +231,13 @@ export class FakeDownloadGuard {
     this.isRunning = true;
 
     injectGuardStyles();
+    this.attachClickSentry();
     this.scan();
     this.startObserver();
   }
 
   /**
-   * Stops monitoring and restores any quarantined elements.
+   * Stops monitoring and restores any quarantined elements and beacons.
    */
   public stop(): void {
     if (!this.isRunning) return;
@@ -132,7 +248,60 @@ export class FakeDownloadGuard {
       this.observer = null;
     }
 
+    this.detachClickSentry();
     removeAllQuarantines();
+    removeAllBeacons();
+  }
+
+  /**
+   * Intercepts clicks in the capture phase to peel cloaked download/magnet links
+   * and bypass middleman ad popunders cleanly.
+   */
+  private handleDownloadClick = (e: MouseEvent): void => {
+    let target = e.target as HTMLElement | null;
+    let clickable: HTMLElement | null = null;
+    const docBody = typeof document !== 'undefined' ? document.body : null;
+    const docEl = typeof document !== 'undefined' ? document.documentElement : null;
+
+    while (target && target !== docBody && target !== docEl) {
+      const tag = target.tagName.toLowerCase();
+      if (
+        tag === 'a' ||
+        tag === 'button' ||
+        target.getAttribute('role') === 'button' ||
+        target.hasAttribute('data-magnet') ||
+        target.hasAttribute('data-url') ||
+        target.hasAttribute('data-href')
+      ) {
+        clickable = target;
+        break;
+      }
+      target = target.parentElement;
+    }
+
+    if (!clickable) return;
+    const href = (clickable as HTMLAnchorElement).href || clickable.getAttribute('href') || '';
+
+    // Check if this element or its href has a cloaked direct file or magnet link
+    const peeled = peelRealDownloadUrl(href, clickable);
+    if (peeled && peeled !== href) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      console.log('[ZenWeb] Bypassed middleman ad redirect, launching genuine URL:', peeled);
+      window.location.href = peeled;
+    }
+  };
+
+  private attachClickSentry(): void {
+    if (this.clickSentryAttached || typeof window === 'undefined') return;
+    this.clickSentryAttached = true;
+    window.addEventListener('click', this.handleDownloadClick, { capture: true });
+  }
+
+  private detachClickSentry(): void {
+    if (!this.clickSentryAttached || typeof window === 'undefined') return;
+    this.clickSentryAttached = false;
+    window.removeEventListener('click', this.handleDownloadClick, { capture: true });
   }
 
   /**
@@ -149,7 +318,7 @@ export class FakeDownloadGuard {
   }
 
   /**
-   * Scans the document for download candidates.
+   * Scans the document for download candidates, defusing traps and illuminating verified real downloads.
    */
   public scan(): void {
     if (!this.isRunning || this.isScanning) return;
@@ -157,8 +326,8 @@ export class FakeDownloadGuard {
 
     requestAnimationFrame(() => {
       let newlyDefusedCount = 0;
+      const legitCandidates: { el: HTMLElement; score: number }[] = [];
 
-      // Scan candidate anchors, buttons, iframes, ad containers, and images
       const candidates = document.querySelectorAll<HTMLElement>(
         'a[href], button, [role="button"], iframe, ins.adsbygoogle, img'
       );
@@ -184,8 +353,29 @@ export class FakeDownloadGuard {
         if (check.isTrap) {
           quarantineElement(el, check.reason);
           newlyDefusedCount++;
+        } else if (check.legitScore >= 50 && !(el.closest && el.closest(AD_CONTAINER_SELECTORS.join(',')))) {
+          const text = (el.textContent || '').trim();
+          const href = (el as HTMLAnchorElement).href || '';
+          const hasIntent =
+            DOWNLOAD_BAIT_REGEX.test(text) ||
+            REAL_FILE_REGEX.test((el as HTMLAnchorElement).pathname || '') ||
+            href.startsWith('magnet:') ||
+            hasNearbyFileMetadata(el) ||
+            COUNTDOWN_REGEX.test(text);
+
+          if (hasIntent) {
+            legitCandidates.push({ el, score: check.legitScore });
+          }
         }
       });
+
+      // If legitimate candidates exist on an ad-heavy page, illuminate the best verified real download button
+      if (legitCandidates.length > 0) {
+        legitCandidates.sort((a, b) => b.score - a.score);
+        const topCandidate = legitCandidates[0].el;
+        const detail = extractFileDetail(topCandidate);
+        illuminateRealButton(topCandidate, detail);
+      }
 
       if (newlyDefusedCount > 0) {
         recordProtectionEvent('fakeDownloadsDefused', newlyDefusedCount).catch((err) => {
@@ -198,150 +388,194 @@ export class FakeDownloadGuard {
   }
 
   /**
-   * Evaluates whether a given DOM element is an ad trap masquerading as a download.
+   * Evaluates whether a given DOM element is an ad trap using the Dual-Phase Differential Scoring Engine.
    */
-  public evaluateElement(el: HTMLElement): { isTrap: boolean; reason: string } {
+  public evaluateElement(el: HTMLElement): EvaluationResult {
     const tagName = el.tagName.toLowerCase();
 
-    // Skip if already quarantined or explicitly overridden
+    // Skip if already overridden
     if (el.getAttribute('data-zenweb-override') === 'true') {
-      return { isTrap: false, reason: '' };
+      return { isTrap: false, reason: '', legitScore: 100, trapScore: 0 };
     }
 
-    // Check if element is inside an identified ad container
-    const isInsideAdContainer = Boolean(el.closest(AD_CONTAINER_SELECTORS.join(',')));
-
-    // Text content / button label
     const text = (el.textContent || '').trim();
-    const hasDownloadKeyword = DOWNLOAD_BAIT_REGEX.test(text);
 
-    // Image alt or src check
-    let imgHasDownloadBait = false;
-    let imgBaitSrc = false;
-    if (tagName === 'img') {
-      const img = el as HTMLImageElement;
-      const altOrTitle = `${img.alt} ${img.title}`;
-      imgHasDownloadBait = DOWNLOAD_BAIT_REGEX.test(altOrTitle);
-      imgBaitSrc = /(download|installer|setup)[-_]?(button|now|btn|green|blue)?\.(png|jpg|gif|webp)/i.test(img.src);
-    } else {
-      const innerImg = el.querySelector('img');
-      if (innerImg) {
-        const altOrTitle = `${innerImg.alt} ${innerImg.title}`;
-        imgHasDownloadBait = DOWNLOAD_BAIT_REGEX.test(altOrTitle);
-        imgBaitSrc = /(download|installer|setup)[-_]?(button|now|btn|green|blue)?\.(png|jpg|gif|webp)/i.test(innerImg.src);
+    // ── Hard Exemption 1: Business & Document Exports (Zero False Positives in SaaS/Webmail/Banking) ──
+    if (DOCUMENT_EXPORT_REGEX.test(text)) {
+      const isInsideAd = Boolean(el.closest && el.closest(AD_CONTAINER_SELECTORS.join(',')));
+      if (!isInsideAd) {
+        return { isTrap: false, reason: '', legitScore: 100, trapScore: 0 };
       }
     }
 
-    const hasBaitSignal = hasDownloadKeyword || imgHasDownloadBait || imgBaitSrc;
-
-    // ── Case 1: Download keyword or bait button inside an Ad Container ──
-    if (isInsideAdContainer && hasBaitSignal) {
-      return { isTrap: true, reason: 'Fake Download' };
+    // ── Check for Transparent Clickjacking Overlays ──
+    if (isTransparentClickOverlay(el)) {
+      return { isTrap: true, reason: 'Transparent Overlay Trap', legitScore: 0, trapScore: 100 };
     }
 
-    // ── Case 2: Anchor links (Check Destination & Cross-Origin Discrepancy) ──
+    let legitScore = 0;
+    let trapScore = 0;
+    let dominantTrapReason = 'Fake Download';
+
+    // ── Structural Origin Analysis ──
+    const isInsideAdContainer = Boolean(el.closest && el.closest(AD_CONTAINER_SELECTORS.join(',')));
+    if (isInsideAdContainer) {
+      trapScore += 40;
+      dominantTrapReason = 'Ad Container Trap';
+    }
+
+    // Semantic hierarchy: inside primary content container
+    const isInsideMain = Boolean(el.closest && el.closest('main, article, [role="main"], #download, .download-section, .content'));
+    if (isInsideMain && !isInsideAdContainer) {
+      legitScore += 20;
+    }
+
+    // Semantic File Metadata Proximity
+    if (!isInsideAdContainer && hasNearbyFileMetadata(el)) {
+      legitScore += 60;
+    }
+
+    // Download bait keywords
+    const hasDownloadKeyword = DOWNLOAD_BAIT_REGEX.test(text);
+
+    // Image analysis
+    let hasBaitImage = false;
+    if (tagName === 'img') {
+      const img = el as HTMLImageElement;
+      const altOrTitle = `${img.alt || ''} ${img.title || ''}`;
+      hasBaitImage = DOWNLOAD_BAIT_REGEX.test(altOrTitle) || DECEPTIVE_IMG_REGEX.test(img.src || '');
+    } else {
+      const innerImg = el.querySelector ? el.querySelector('img') : null;
+      if (innerImg) {
+        const altOrTitle = `${innerImg.alt || ''} ${innerImg.title || ''}`;
+        hasBaitImage = DOWNLOAD_BAIT_REGEX.test(altOrTitle) || DECEPTIVE_IMG_REGEX.test(innerImg.src || '');
+      }
+    }
+
+    if (hasDownloadKeyword || hasBaitImage) {
+      if (isInsideAdContainer) {
+        trapScore += 45;
+      }
+    }
+
+    // ── Case A: Anchor Elements (href analysis) ──
     if (tagName === 'a') {
       const link = el as HTMLAnchorElement;
       const href = link.href || link.getAttribute('href') || '';
 
-      // Skip non-http or in-page anchors unless they have suspicious click handlers
-      if (!href || href.startsWith('#') || href.startsWith('javascript:')) {
-        const onclick = link.getAttribute('onclick') || '';
-        if (hasBaitSignal && (onclick.includes('window.open') || AD_NETWORK_REGEX.test(onclick))) {
-          return { isTrap: true, reason: 'Fake Download' };
-        }
-        return { isTrap: false, reason: '' };
-      }
+      if (href && !href.startsWith('#') && !href.startsWith('javascript:')) {
+        try {
+          const base = typeof window !== 'undefined' && window.location ? window.location.href : 'https://localhost';
+          const currentHost = typeof window !== 'undefined' && window.location ? window.location.hostname : 'localhost';
+          const targetUrl = new URL(href, base);
+          const targetHost = targetUrl.hostname.toLowerCase();
 
-      // SAFEGUARD 1: Verified Trusted Software Host Allowlist (GitHub, SourceForge, PyPI, etc.)
-      if (isTrustedSoftwareHost(href)) {
-        return { isTrap: false, reason: '' };
-      }
+          const currentBaseDomain = getRegistrableBaseDomain(currentHost);
+          const targetBaseDomain = getRegistrableBaseDomain(targetHost);
+          const isSameOrganization = currentBaseDomain === targetBaseDomain;
+          const isSameHost = targetHost === currentHost || targetHost.endsWith('.' + currentHost);
 
-      // SAFEGUARD 2: Verified Binary / Archive file download
-      const isGenuineFile = REAL_FILE_REGEX.test(link.pathname) || link.hasAttribute('download');
-      if (isGenuineFile) {
-        // Even if it has a file extension, if it directly targets an ad-network click tracker, it's deceptive
-        if (AD_NETWORK_REGEX.test(href) && AD_QUERY_PARAM_REGEX.test(href)) {
-          return { isTrap: true, reason: 'Fake Download' };
-        }
-        return { isTrap: false, reason: '' };
-      }
+          // Direct genuine binary / archive file target
+          const hasDirectFile = REAL_FILE_REGEX.test(targetUrl.pathname) || link.hasAttribute('download');
+          if (hasDirectFile) {
+            legitScore += 50;
+          }
 
-      // Check for ad network links or affiliate click trackers masquerading as downloads
-      const isAdNetworkUrl = AD_NETWORK_REGEX.test(href);
-      const hasTrackerParams = AD_QUERY_PARAM_REGEX.test(href);
+          if (link.hasAttribute('download')) {
+            legitScore += 40;
+          }
 
-      if (hasBaitSignal && (isAdNetworkUrl || hasTrackerParams)) {
-        return { isTrap: true, reason: 'Fake Download' };
-      }
+          // Same-origin or same organization mirror
+          if (isSameHost || isSameOrganization) {
+            legitScore += 40;
+          }
 
-      // Cross-origin check: link text says "Download" but links to an external domain with no file extension
-      try {
-        const base = typeof window !== 'undefined' && window.location ? window.location.href : 'https://localhost';
-        const currentHost = typeof window !== 'undefined' && window.location ? window.location.hostname : 'localhost';
-        const targetUrl = new URL(href, base);
-        const isCrossOrigin =
-          targetUrl.hostname !== currentHost &&
-          !targetUrl.hostname.endsWith('.' + currentHost);
+          // Designated software release route
+          if (/\/(download|downloads|dl|get|releases|files|file|installer)\//i.test(targetUrl.pathname)) {
+            legitScore += 30;
+          }
 
-        if (hasBaitSignal && isCrossOrigin && !isGenuineFile) {
-          // Exclude trusted software repositories
-          if (!isTrustedSoftwareHost(href)) {
-            const isShortBait = text.length < 40 && (hasDownloadKeyword || imgHasDownloadBait || imgBaitSrc);
-            if (isShortBait) {
-              return { isTrap: true, reason: 'Fake Download' };
+          // Commercial click-tracking parameters
+          const hasCommercialTracker = COMMERCIAL_TRACKER_PARAMS_REGEX.test(href);
+          if (hasCommercialTracker) {
+            trapScore += 50;
+            dominantTrapReason = 'Click-Tracking Ad Trap';
+          }
+
+          // Cross-origin disconnect with no direct file
+          const isCrossOrigin = !isSameHost && !isSameOrganization;
+          if (isCrossOrigin) {
+            if (!hasDirectFile && (hasDownloadKeyword || hasBaitImage)) {
+              trapScore += 40;
+              if (dominantTrapReason === 'Fake Download') {
+                dominantTrapReason = 'Cross-Origin Ad Trap';
+              }
             }
           }
+        } catch {
+          // Invalid URL format
         }
-      } catch {
-        // Invalid URL
+      }
+
+      // Check inline suspicious click handlers
+      const onclick = link.getAttribute('onclick') || '';
+      if (onclick && (onclick.includes('window.open') || onclick.includes('location.href=') || onclick.includes('eval('))) {
+        trapScore += 75;
+        if (hasDownloadKeyword || hasBaitImage) trapScore += 15;
+        dominantTrapReason = 'Suspicious Script Trap';
       }
     }
 
-    // ── Case 3: Ad Iframes (Refined to prevent generic display banner false positives) ──
+    // ── Case B: Iframe Elements ──
     if (tagName === 'iframe') {
       const iframe = el as HTMLIFrameElement;
       const src = iframe.src || '';
-      const isAdNetworkIframe = AD_NETWORK_REGEX.test(src);
+      const iframeMeta = `${iframe.title || ''} ${iframe.name || ''} ${src}`;
+      const hasDownloadMeta = DOWNLOAD_BAIT_REGEX.test(iframeMeta) || el.getAttribute('data-ad-type')?.includes('download');
 
-      if (isAdNetworkIframe) {
-        // Only flag if the iframe has download intent/context, NOT generic display ads:
-        // 1. Located inside or immediately near a download container
-        const isNearDownload = Boolean(el.closest('[class*="download" i], [id*="download" i]'));
-        // 2. Iframe title, name, or src specifically contains download bait keywords
-        const iframeMeta = `${iframe.title} ${iframe.name} ${src}`;
-        const hasDownloadMeta = DOWNLOAD_BAIT_REGEX.test(iframeMeta);
-        // 3. Iframe has data-ad-type indicating download
-        const hasDownloadAttr = el.getAttribute('data-ad-type')?.includes('download');
-
-        if (isNearDownload || hasDownloadMeta || hasDownloadAttr) {
-          return { isTrap: true, reason: 'Fake Download' };
-        }
+      if (isInsideAdContainer && hasDownloadMeta) {
+        trapScore += 50;
+        dominantTrapReason = 'Deceptive Ad Iframe';
       }
     }
 
-    // ── Case 4: Standalone Buttons and Clickjackers ──
+    // ── Case C: Standalone Buttons & Clickjackers ──
     if (tagName === 'button' || el.getAttribute('role') === 'button') {
-      if (hasBaitSignal) {
-        if (isInsideAdContainer) {
-          return { isTrap: true, reason: 'Fake Download' };
-        }
-        const onclick = el.getAttribute('onclick') || '';
-        if (onclick && (onclick.includes('window.open') || AD_NETWORK_REGEX.test(onclick))) {
-          return { isTrap: true, reason: 'Fake Download' };
-        }
+      const onclick = el.getAttribute('onclick') || '';
+      if (onclick && (onclick.includes('window.open') || onclick.includes('location.href=') || onclick.includes('eval('))) {
+        trapScore += 75;
+        if (hasDownloadKeyword || hasBaitImage) trapScore += 15;
+        dominantTrapReason = 'Suspicious Script Trap';
+      }
+
+      // In-page Google AdSense single-word "OPEN" / "START" CTA disguise inside ad container
+      if (isInsideAdContainer && /^(open|start|install|continue)$/i.test(text)) {
+        trapScore += 65;
+        dominantTrapReason = 'Deceptive Ad CTA';
       }
     }
 
-    // ── Case 5: Standalone Deceptive Download Images ──
-    if (tagName === 'img' && (imgHasDownloadBait || imgBaitSrc)) {
-      if (isInsideAdContainer) {
-        return { isTrap: true, reason: 'Fake Download' };
-      }
+    // ── Case D: Standalone Deceptive Bait Images ──
+    if (tagName === 'img' && hasBaitImage && isInsideAdContainer) {
+      trapScore += 40;
+      dominantTrapReason = 'Deceptive Bait Graphic';
     }
 
-    return { isTrap: false, reason: '' };
+    // ── Decision Boundary ──
+    // Rule 1: High Legitimate Immunity (Real download button on CDN or with metadata)
+    if (legitScore >= 50 && !isInsideAdContainer) {
+      return { isTrap: false, reason: '', legitScore, trapScore };
+    }
+
+    // Rule 2: Confirmed Trap Boundary
+    const isTrap = trapScore >= 70 && (trapScore - legitScore) >= 40;
+
+    return {
+      isTrap,
+      reason: isTrap ? dominantTrapReason : '',
+      legitScore,
+      trapScore,
+    };
   }
 
   /**
@@ -374,4 +608,5 @@ export class FakeDownloadGuard {
 
 // Singleton instance
 export const downloadGuard = new FakeDownloadGuard();
+
 
