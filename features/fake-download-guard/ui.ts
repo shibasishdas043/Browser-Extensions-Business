@@ -70,10 +70,10 @@ export function injectGuardStyles(): void {
     }
 
     [${BEACON_ATTR}="true"] {
-      outline: 2px solid #34c759 !important;
-      outline-offset: 3px !important;
-      box-shadow: 0 0 16px rgba(52, 199, 89, 0.35) !important;
-      transition: outline 0.3s ease, box-shadow 0.3s ease !important;
+      outline: 1.5px solid #1c522b !important;
+      outline-offset: 2px !important;
+      box-shadow: none !important;
+      transition: outline 0.2s ease !important;
     }
 
     .${BEACON_CLASS} {
@@ -82,18 +82,16 @@ export function injectGuardStyles(): void {
       align-items: center !important;
       gap: 6px !important;
       padding: 4px 10px !important;
-      background: rgba(20, 35, 24, 0.96) !important;
-      backdrop-filter: saturate(180%) blur(20px) !important;
-      -webkit-backdrop-filter: saturate(180%) blur(20px) !important;
-      color: #ffffff !important;
+      background: #0d2818 !important;
+      color: #e6f4ea !important;
       font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif !important;
       font-size: 11px !important;
       font-weight: 500 !important;
       line-height: 1 !important;
       letter-spacing: -0.015em !important;
       border-radius: 9999px !important;
-      border: 1px solid rgba(52, 199, 89, 0.45) !important;
-      box-shadow: 0 4px 16px rgba(52, 199, 89, 0.25), 0 2px 6px rgba(0, 0, 0, 0.2) !important;
+      border: 1px solid #1d4d2b !important;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.45) !important;
       z-index: 2147483640 !important;
       position: absolute !important;
       box-sizing: border-box !important;
@@ -111,8 +109,8 @@ export function injectGuardStyles(): void {
       gap: 5px !important;
       font-family: inherit !important;
       font-size: 11px !important;
-      font-weight: 700 !important;
-      color: #34c759 !important;
+      font-weight: 600 !important;
+      color: #3dd66e !important;
       letter-spacing: -0.02em !important;
       line-height: 1 !important;
     }
@@ -122,7 +120,7 @@ export function injectGuardStyles(): void {
       font-family: inherit !important;
       font-size: 11px !important;
       font-weight: 500 !important;
-      color: rgba(255, 255, 255, 0.9) !important;
+      color: #a8d5b5 !important;
       letter-spacing: -0.012em !important;
       line-height: 1 !important;
       margin-left: 2px !important;
@@ -283,7 +281,7 @@ function createVerifiedShieldIcon(): SVGElement {
   svg.setAttribute('height', '13');
   svg.setAttribute('viewBox', '0 0 24 24');
   svg.setAttribute('fill', 'none');
-  svg.setAttribute('stroke', '#34c759');
+  svg.setAttribute('stroke', '#3dd66e');
   svg.setAttribute('stroke-width', '2.4');
   svg.setAttribute('stroke-linecap', 'round');
   svg.setAttribute('stroke-linejoin', 'round');

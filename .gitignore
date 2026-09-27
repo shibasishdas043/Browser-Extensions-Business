@@ -1,6 +1,50 @@
-test/*
+# Dependencies
+node_modules/
+
+# Production builds & packaging artifacts
+dist/
+*.zip
+*.crx
+
+# Environment & local secrets
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.pfx
+*.p12
+secrets/
+credentials.json
+
+# Internal planning, strategy & store listing notes
 ZenWeb_Business_Plan.md
-.agents
-node_modules
-dist/*
 DESIGN.md
+CHROMEWEBSTORE.md
+
+# AI agent & skill configurations
+.agents/
+
+# Testing & coverage
+test/
+tests/
+coverage/
+
+# OS & Editor metadata
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.sw?
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Temporary cache
+.cache/
+.temp/
+tmp/

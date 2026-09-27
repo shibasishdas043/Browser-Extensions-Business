@@ -223,14 +223,17 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
       if (tabId) {
         const count = Number(message.payload?.count || 0);
         const text = count > 0 ? String(count > 99 ? '99+' : count) : '';
-        chrome.tabs.get(tabId).then((tab) => {
-          if (!tab) return;
-          chrome.action.setBadgeText({ text, tabId }).catch(() => {});
-          chrome.action.setBadgeBackgroundColor({
-            color: message.payload?.paused ? BADGE_COLOR_MUTED : BADGE_COLOR_ACTIVE,
-            tabId,
-          }).catch(() => {});
-        }).catch(() => {});
+        (async () => {
+          try {
+            const tab = await chrome.tabs.get(tabId);
+            if (!tab) return;
+            await chrome.action.setBadgeText({ text, tabId });
+            await chrome.action.setBadgeBackgroundColor({
+              color: message.payload?.paused ? BADGE_COLOR_MUTED : BADGE_COLOR_ACTIVE,
+              tabId,
+            });
+          } catch {}
+        })();
       }
       sendResponse({ success: true });
       break;
@@ -256,12 +259,13 @@ chrome.runtime.onMessage.addListener((message: ExtensionMessage, sender, sendRes
 });
 
 // Clean up badge when tab navigates to a new page
-chrome.tabs.onUpdated.addListener((tabId, changeInfo) => {
+chrome.tabs.onUpdated.addListener(async (tabId, changeInfo) => {
   if (changeInfo.status === 'loading') {
-    chrome.tabs.get(tabId).then((tab) => {
+    try {
+      const tab = await chrome.tabs.get(tabId);
       if (tab) {
-        chrome.action.setBadgeText({ text: '', tabId }).catch(() => {});
+        await chrome.action.setBadgeText({ text: '', tabId });
       }
-    }).catch(() => {});
+    } catch {}
   }
 });

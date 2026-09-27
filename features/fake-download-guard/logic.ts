@@ -56,8 +56,35 @@ export function isTrustedSoftwareHost(hostname: string): boolean {
   const host = hostname.toLowerCase();
   return (
     TRUSTED_SOFTWARE_HOSTS.some((th) => host === th || host.endsWith('.' + th)) ||
-    /\.(cloudfront\.net|akamaihd\.net|fastly\.net|azureedge\.net|blob\.core\.windows\.net|s3\.amazonaws\.com|s3-.*\.amazonaws\.com|cdn77\.org|b-cdn\.net|backblazeb2\.com)$/i.test(host)
+    /(^|\.)(amazonaws\.com|cloudfront\.net|akamaihd\.net|fastly\.net|azureedge\.net|blob\.core\.windows\.net|s3\.amazonaws\.com|s3-.*\.amazonaws\.com|cdn77\.org|b-cdn\.net|backblazeb2\.com)$/i.test(host)
   );
+}
+
+// Excluded media, streaming, and social entertainment platforms where software downloads do not occur
+export const EXCLUDED_MEDIA_DOMAINS = [
+  'youtube.com',
+  'youtu.be',
+  'vimeo.com',
+  'dailymotion.com',
+  'twitch.tv',
+  'netflix.com',
+  'disneyplus.com',
+  'primevideo.com',
+  'hulu.com',
+  'tiktok.com',
+  'instagram.com',
+  'facebook.com',
+  'twitter.com',
+  'x.com',
+  'reddit.com',
+  'spotify.com',
+  'soundcloud.com',
+];
+
+export function isExcludedMediaPlatform(): boolean {
+  if (typeof window === 'undefined' || !window.location || !window.location.hostname) return false;
+  const host = window.location.hostname.toLowerCase().replace(/^www\./, '');
+  return EXCLUDED_MEDIA_DOMAINS.some((d) => host === d || host.endsWith('.' + d));
 }
 
 // Multi-language download bait and high-urgency copywriting phrases
@@ -131,9 +158,8 @@ export function hasNearbyFileMetadata(el: HTMLElement): boolean {
   const ownText = `${el.textContent || ''} ${el.getAttribute('aria-label') || ''}`;
   if (
     FILE_SIZE_REGEX.test(ownText) ||
-    MOVIE_FORMAT_REGEX.test(ownText) ||
-    AUDIO_FORMAT_REGEX.test(ownText) ||
-    (VERSION_REGEX.test(ownText) && ARCH_REGEX.test(ownText))
+    (VERSION_REGEX.test(ownText) && ARCH_REGEX.test(ownText)) ||
+    (FILE_SIZE_REGEX.test(ownText) && (MOVIE_FORMAT_REGEX.test(ownText) || AUDIO_FORMAT_REGEX.test(ownText)))
   ) {
     return true;
   }
@@ -159,7 +185,7 @@ export function hasNearbyFileMetadata(el: HTMLElement): boolean {
     if (AUDIO_FORMAT_REGEX.test(text)) metadataMatches++;
     if (GAME_FORMAT_REGEX.test(text)) metadataMatches++;
 
-    if (metadataMatches >= 2 || (metadataMatches >= 1 && (FILE_SIZE_REGEX.test(text) || MOVIE_FORMAT_REGEX.test(text) || AUDIO_FORMAT_REGEX.test(text)))) {
+    if (metadataMatches >= 2 || FILE_SIZE_REGEX.test(text)) {
       return true;
     }
     curr = curr.parentElement;
@@ -180,8 +206,8 @@ export function extractFileDetail(el: HTMLElement): string {
   const sizeMatch = combined.match(FILE_SIZE_REGEX);
   if (sizeMatch) return sizeMatch[0];
 
-  const movieMatch = combined.match(MOVIE_FORMAT_REGEX);
-  if (movieMatch) return movieMatch[0].toUpperCase();
+  const verMatch = combined.match(VERSION_REGEX);
+  if (verMatch) return verMatch[0];
 
   const audioMatch = combined.match(AUDIO_FORMAT_REGEX);
   if (audioMatch) return audioMatch[0].toUpperCase();
@@ -189,10 +215,75 @@ export function extractFileDetail(el: HTMLElement): string {
   const gameMatch = combined.match(GAME_FORMAT_REGEX);
   if (gameMatch) return gameMatch[0];
 
-  const verMatch = combined.match(VERSION_REGEX);
-  if (verMatch) return verMatch[0];
+  const movieMatch = combined.match(MOVIE_FORMAT_REGEX);
+  if (movieMatch) return movieMatch[0].toUpperCase();
 
   return 'Direct Link';
+}
+
+/**
+ * Rigorously checks whether an element is an authentic downloadable file or software link.
+ * Prevents video cards, articles, and generic links from falsely qualifying as download targets.
+ */
+export function isLegitimateDownloadTarget(el: HTMLElement): boolean {
+  const tagName = el.tagName.toLowerCase();
+  const text = (el.textContent || '').trim();
+  const ariaLabel = el.getAttribute('aria-label') || '';
+  const title = el.getAttribute('title') || '';
+  const combined = `${text} ${ariaLabel} ${title}`.toLowerCase();
+
+  // Navigation, streaming, and social interaction exemptions
+  if (
+    /^(home|about|contact|login|sign in|sign up|register|pricing|terms|privacy|blog|docs|documentation|faq|support|cart|checkout|watch|play|listen|share|subscribe|like|dislike|channel)$/i.test(
+      text
+    )
+  ) {
+    return false;
+  }
+
+  // 1. Direct file download link or explicit download attribute
+  if (tagName === 'a') {
+    const link = el as HTMLAnchorElement;
+    if (link.hasAttribute('download')) {
+      return true;
+    }
+    const href = link.href || link.getAttribute('href') || '';
+    if (href.startsWith('magnet:?xt=')) {
+      return true;
+    }
+    try {
+      const base = typeof window !== 'undefined' && window.location ? window.location.href : 'https://localhost';
+      const targetUrl = new URL(href, base);
+      if (REAL_FILE_REGEX.test(targetUrl.pathname)) {
+        return true;
+      }
+      // Official software release or download route accompanied by download intent
+      if (/\/(download|downloads|releases\/download|get|dl)\//i.test(targetUrl.pathname)) {
+        if (/\b(download|install|get|setup)\b/i.test(combined)) {
+          return true;
+        }
+      }
+    } catch {}
+  }
+
+  // 2. Element carrying explicit data-download / data-magnet attributes
+  if (el.hasAttribute('data-magnet') || el.hasAttribute('data-download') || el.hasAttribute('data-url')) {
+    const dataVal = el.getAttribute('data-magnet') || el.getAttribute('data-download') || el.getAttribute('data-url') || '';
+    if (dataVal.startsWith('magnet:') || REAL_FILE_REGEX.test(dataVal)) {
+      return true;
+    }
+  }
+
+  // 3. Button or link with explicit download action verb AND verified file size
+  if (tagName === 'button' || el.getAttribute('role') === 'button' || tagName === 'a') {
+    const hasDownloadVerb = /\b(download|direct download|mirror download|download file|download now|installer)\b/i.test(combined);
+    const hasFileSize = FILE_SIZE_REGEX.test(combined) || (el.parentElement && FILE_SIZE_REGEX.test(el.parentElement.textContent || ''));
+    if (hasDownloadVerb && hasFileSize) {
+      return true;
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -301,7 +392,7 @@ export class FakeDownloadGuard {
    * Starts monitoring the document for fake download buttons and deceptive ads.
    */
   public start(): void {
-    if (this.isRunning) return;
+    if (this.isRunning || isExcludedMediaPlatform()) return;
     this.isRunning = true;
 
     injectGuardStyles();
@@ -481,7 +572,7 @@ export class FakeDownloadGuard {
    * Scans the document for download candidates, defusing traps and illuminating verified real downloads.
    */
   public scan(): void {
-    if (!this.isRunning || this.isScanning) return;
+    if (!this.isRunning || this.isScanning || isExcludedMediaPlatform()) return;
     this.isScanning = true;
 
     requestAnimationFrame(() => {
@@ -526,23 +617,19 @@ export class FakeDownloadGuard {
           quarantineElement(el, check.reason);
           newlyDefusedCount++;
         } else if (check.legitScore >= 50 && !(el.closest && el.closest(AD_CONTAINER_SELECTORS.join(',')))) {
-          const text = (el.textContent || '').trim();
-          const href = (el as HTMLAnchorElement).href || '';
-          const hasIntent =
-            DOWNLOAD_BAIT_REGEX.test(text) ||
-            REAL_FILE_REGEX.test((el as HTMLAnchorElement).pathname || '') ||
-            href.startsWith('magnet:') ||
-            hasNearbyFileMetadata(el) ||
-            COUNTDOWN_REGEX.test(text);
-
-          if (hasIntent) {
+          if (isLegitimateDownloadTarget(el)) {
             legitCandidates.push({ el, score: check.legitScore });
           }
         }
       });
 
-      // If legitimate candidates exist on an ad-heavy page, illuminate the best verified real download button
-      if (legitCandidates.length > 0) {
+      // Illuminate verified beacon ONLY on pages with active download traps or recognized software hosts
+      const hasDefusedTraps = newlyDefusedCount > 0 || document.querySelector(`[${QUARANTINE_ATTR}="true"]`) !== null;
+      const isKnownSoftwareHost = isTrustedSoftwareHost(
+        typeof window !== 'undefined' && window.location ? window.location.hostname : ''
+      );
+
+      if (legitCandidates.length > 0 && (hasDefusedTraps || isKnownSoftwareHost)) {
         legitCandidates.sort((a, b) => b.score - a.score);
         const topCandidate = legitCandidates[0].el;
         const detail = extractFileDetail(topCandidate);
