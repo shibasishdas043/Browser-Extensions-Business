@@ -5,17 +5,18 @@
  * Complies with strict XSS prevention: 100% textContent & DOM APIs (no innerHTML).
  */
 
-const STYLE_ID = 'zenweb-download-guard-styles';
-const BADGE_CLASS = 'zw-guard-badge';
-const BEACON_CLASS = 'zw-beacon-badge';
-const QUARANTINE_ATTR = 'data-zenweb-quarantine';
-const OVERRIDE_ATTR = 'data-zenweb-override';
-const BEACON_ATTR = 'data-zenweb-verified-real';
+export const STYLE_ID = 'zenweb-download-guard-styles';
+export const BADGE_CLASS = 'zw-guard-badge';
+export const BEACON_CLASS = 'zw-beacon-badge';
+export const QUARANTINE_ATTR = 'data-zenweb-quarantine';
+export const OVERRIDE_ATTR = 'data-zenweb-override';
+export const BEACON_ATTR = 'data-zenweb-verified-real';
 
 interface QuarantinedItem {
   target: HTMLElement;
   badge: HTMLElement;
   originalDisplay?: string;
+  neutralizedAnchors?: HTMLAnchorElement[];
 }
 
 interface BeaconItem {
@@ -375,6 +376,21 @@ export function updatePillPositions(): void {
       if (item.originalDisplay !== undefined) {
         target.style.display = item.originalDisplay;
       }
+      item.neutralizedAnchors?.forEach((a) => {
+        a.removeAttribute(QUARANTINE_ATTR);
+        const origHref = a.getAttribute('data-zenweb-orig-href');
+        if (origHref !== null) {
+          if (origHref) a.setAttribute('href', origHref);
+          else a.removeAttribute('href');
+          a.removeAttribute('data-zenweb-orig-href');
+        }
+        const origTarget = a.getAttribute('data-zenweb-orig-target');
+        if (origTarget !== null) {
+          if (origTarget) a.setAttribute('target', origTarget);
+          else a.removeAttribute('target');
+          a.removeAttribute('data-zenweb-orig-target');
+        }
+      });
       elementResizeObserver?.unobserve(target);
       activeQuarantines.splice(i, 1);
       continue;
@@ -465,6 +481,29 @@ export function quarantineElement(el: HTMLElement, reason: string): void {
 
   el.setAttribute(QUARANTINE_ATTR, 'true');
 
+  const neutralizedAnchors: HTMLAnchorElement[] = [];
+  const directAnchor = el.tagName.toLowerCase() === 'a' ? (el as HTMLAnchorElement) : null;
+  const parentAnchor = el.closest('a') as HTMLAnchorElement | null;
+  const childAnchors = Array.from(el.querySelectorAll<HTMLAnchorElement>('a'));
+
+  const allAnchors = new Set<HTMLAnchorElement>();
+  if (directAnchor) allAnchors.add(directAnchor);
+  if (parentAnchor) allAnchors.add(parentAnchor);
+  childAnchors.forEach((a) => allAnchors.add(a));
+
+  allAnchors.forEach((a) => {
+    a.setAttribute(QUARANTINE_ATTR, 'true');
+    if (!a.hasAttribute('data-zenweb-orig-href')) {
+      a.setAttribute('data-zenweb-orig-href', a.getAttribute('href') || '');
+    }
+    if (!a.hasAttribute('data-zenweb-orig-target')) {
+      a.setAttribute('data-zenweb-orig-target', a.getAttribute('target') || '');
+    }
+    a.setAttribute('href', 'javascript:void(0)');
+    a.removeAttribute('target');
+    neutralizedAnchors.push(a);
+  });
+
   let originalDisplay: string | undefined;
   if (window.getComputedStyle(el).display === 'inline') {
     originalDisplay = el.style.display;
@@ -474,20 +513,13 @@ export function quarantineElement(el: HTMLElement, reason: string): void {
   const badge = document.createElement('div');
   badge.className = BADGE_CLASS;
   badge.setAttribute('role', 'alert');
-  badge.setAttribute('aria-label', 'Fake download button detected by ZenWeb');
+  badge.setAttribute('aria-label', 'Fake download button detected');
 
   const brandWrap = document.createElement('span');
   brandWrap.className = 'zw-guard-brand';
 
   const shieldIcon = createShieldIcon();
-  const brandText = document.createElement('span');
-  brandText.textContent = 'ZenWeb';
-
   brandWrap.appendChild(shieldIcon);
-  brandWrap.appendChild(brandText);
-
-  const dotSep = document.createElement('span');
-  dotSep.className = 'zw-guard-sep';
 
   const subSpan = document.createElement('span');
   subSpan.className = 'zw-guard-sub';
@@ -507,18 +539,33 @@ export function quarantineElement(el: HTMLElement, reason: string): void {
     if (originalDisplay !== undefined) {
       el.style.display = originalDisplay;
     }
+    neutralizedAnchors.forEach((a) => {
+      a.removeAttribute(QUARANTINE_ATTR);
+      a.setAttribute(OVERRIDE_ATTR, 'true');
+      const origHref = a.getAttribute('data-zenweb-orig-href');
+      if (origHref !== null) {
+        if (origHref) a.setAttribute('href', origHref);
+        else a.removeAttribute('href');
+        a.removeAttribute('data-zenweb-orig-href');
+      }
+      const origTarget = a.getAttribute('data-zenweb-orig-target');
+      if (origTarget !== null) {
+        if (origTarget) a.setAttribute('target', origTarget);
+        else a.removeAttribute('target');
+        a.removeAttribute('data-zenweb-orig-target');
+      }
+    });
     elementResizeObserver?.unobserve(el);
     const idx = activeQuarantines.findIndex((q) => q.target === el);
     if (idx !== -1) activeQuarantines.splice(idx, 1);
   });
 
   badge.appendChild(brandWrap);
-  badge.appendChild(dotSep);
   badge.appendChild(subSpan);
   badge.appendChild(revealBtn);
 
   document.body.appendChild(badge);
-  activeQuarantines.push({ target: el, badge, originalDisplay });
+  activeQuarantines.push({ target: el, badge, originalDisplay, neutralizedAnchors });
 
   elementResizeObserver?.observe(el);
 
@@ -545,14 +592,14 @@ export function illuminateRealButton(el: HTMLElement, fileDetail?: string): void
   const badge = document.createElement('div');
   badge.className = BEACON_CLASS;
   badge.setAttribute('role', 'status');
-  badge.setAttribute('aria-label', 'Verified genuine download link identified by ZenWeb');
+  badge.setAttribute('aria-label', 'Verified genuine download link');
 
   const brandWrap = document.createElement('span');
   brandWrap.className = 'zw-beacon-brand';
 
   const shieldIcon = createVerifiedShieldIcon();
   const brandText = document.createElement('span');
-  brandText.textContent = 'ZenWeb · Verified';
+  brandText.textContent = 'Verified';
 
   brandWrap.appendChild(shieldIcon);
   brandWrap.appendChild(brandText);
@@ -594,6 +641,18 @@ export function removeAllQuarantines(): void {
   document.querySelectorAll<HTMLElement>(`[${QUARANTINE_ATTR}]`).forEach((el) => {
     el.removeAttribute(QUARANTINE_ATTR);
     el.removeAttribute(OVERRIDE_ATTR);
+    const origHref = el.getAttribute('data-zenweb-orig-href');
+    if (origHref !== null) {
+      if (origHref) el.setAttribute('href', origHref);
+      else el.removeAttribute('href');
+      el.removeAttribute('data-zenweb-orig-href');
+    }
+    const origTarget = el.getAttribute('data-zenweb-orig-target');
+    if (origTarget !== null) {
+      if (origTarget) el.setAttribute('target', origTarget);
+      else el.removeAttribute('target');
+      el.removeAttribute('data-zenweb-orig-target');
+    }
   });
 
   for (const item of activeQuarantines) {
@@ -601,6 +660,21 @@ export function removeAllQuarantines(): void {
     if (item.originalDisplay !== undefined) {
       item.target.style.display = item.originalDisplay;
     }
+    item.neutralizedAnchors?.forEach((a) => {
+      a.removeAttribute(QUARANTINE_ATTR);
+      const origHref = a.getAttribute('data-zenweb-orig-href');
+      if (origHref !== null) {
+        if (origHref) a.setAttribute('href', origHref);
+        else a.removeAttribute('href');
+        a.removeAttribute('data-zenweb-orig-href');
+      }
+      const origTarget = a.getAttribute('data-zenweb-orig-target');
+      if (origTarget !== null) {
+        if (origTarget) a.setAttribute('target', origTarget);
+        else a.removeAttribute('target');
+        a.removeAttribute('data-zenweb-orig-target');
+      }
+    });
     elementResizeObserver?.unobserve(item.target);
   }
   activeQuarantines.length = 0;

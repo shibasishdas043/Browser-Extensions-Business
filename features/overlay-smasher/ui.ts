@@ -1,8 +1,11 @@
 /**
- * Modal & Paywall Smasher — UI Module
- * Injects non-intrusive toast notifications and comprehensive global unblur CSS
- * so pages are crystal clear and fully interactive after overlays are destroyed.
+ * Modal & Paywall Smasher — UI Module 3.0
+ * Injects non-intrusive toast notifications into the universal bottom-right corner stack
+ * and comprehensive global unblur/unlock CSS so pages are crystal clear and fully interactive.
+ * 100% XSS-Safe: strictly uses DOM APIs and textContent.
  */
+
+import { mountCornerPopup, unmountCornerPopup } from '../../content/corner-stack';
 
 const STYLE_ID = 'zenweb-overlay-smasher-styles';
 const TOAST_ID = 'zw-smashed-overlay-toast';
@@ -18,13 +21,18 @@ export function injectOverlaySmasherStyles(): void {
     html.zw-smashed body {
       overflow: auto !important;
       overflow-y: auto !important;
+      overflow-x: auto !important;
       position: static !important;
       pointer-events: auto !important;
       user-select: auto !important;
+      height: auto !important;
+      max-height: none !important;
+      touch-action: auto !important;
+      overscroll-behavior: auto !important;
     }
 
     /* Force-defeat any class or stylesheet based blur/pointer-events lock on page contents */
-    html.zw-smashed body > *:not([class*="zw-"]):not(#${TOAST_ID}):not(#zw-jump-to-recipe-btn):not(#zw-recipe-reader-modal):not(#zw-recipe-reader-modal *),
+    html.zw-smashed body > *:not([class*="zw-"]):not([id*="zw-"]):not([data-zw-smashed="true"]),
     html.zw-smashed main,
     html.zw-smashed #root,
     html.zw-smashed #app,
@@ -32,6 +40,7 @@ export function injectOverlaySmasherStyles(): void {
     html.zw-smashed [id*="page" i],
     html.zw-smashed [id*="main" i],
     html.zw-smashed [id*="wrap" i],
+    html.zw-smashed [id*="content" i],
     html.zw-smashed [class*="page" i],
     html.zw-smashed [class*="wrap" i],
     html.zw-smashed [class*="content" i],
@@ -48,10 +57,6 @@ export function injectOverlaySmasherStyles(): void {
 
     #${TOAST_ID} {
       all: initial;
-      position: fixed !important;
-      bottom: 24px !important;
-      left: 24px !important;
-      z-index: 2147483645 !important;
       display: inline-flex !important;
       align-items: center !important;
       gap: 10px !important;
@@ -60,7 +65,7 @@ export function injectOverlaySmasherStyles(): void {
       backdrop-filter: saturate(180%) blur(20px) !important;
       -webkit-backdrop-filter: saturate(180%) blur(20px) !important;
       color: #ffffff !important;
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif !important;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif !important;
       font-size: 12px !important;
       font-weight: 500 !important;
       line-height: 1 !important;
@@ -70,6 +75,7 @@ export function injectOverlaySmasherStyles(): void {
       animation: zwToastSlideIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
       pointer-events: auto !important;
       user-select: none !important;
+      box-sizing: border-box !important;
     }
 
     #${TOAST_ID} .zw-toast-undo-btn {
@@ -82,7 +88,7 @@ export function injectOverlaySmasherStyles(): void {
       border: 1px solid rgba(168, 85, 247, 0.55) !important;
       border-radius: 9999px !important;
       color: #e9d5ff !important;
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif !important;
+      font-family: inherit !important;
       font-size: 11px !important;
       font-weight: 600 !important;
       cursor: pointer !important;
@@ -125,10 +131,12 @@ export function showSmashedToast(msg: string, onUndo?: () => void): void {
   if (!toast) {
     toast = document.createElement('div');
     toast.id = TOAST_ID;
-    document.body.appendChild(toast);
   }
 
-  toast.innerHTML = '';
+  // Clear previous child nodes safely without innerHTML
+  while (toast.firstChild) {
+    toast.removeChild(toast.firstChild);
+  }
 
   const labelSpan = document.createElement('span');
   labelSpan.textContent = msg;
@@ -138,7 +146,7 @@ export function showSmashedToast(msg: string, onUndo?: () => void): void {
     const undoBtn = document.createElement('button');
     undoBtn.type = 'button';
     undoBtn.className = 'zw-toast-undo-btn';
-    undoBtn.innerHTML = '↩️ Undo';
+    undoBtn.textContent = '↩️ Undo';
     undoBtn.title = 'Restore smashed overlay';
     undoBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -148,20 +156,19 @@ export function showSmashedToast(msg: string, onUndo?: () => void): void {
       undoBtn.remove();
       if (toastDismissTimer) clearTimeout(toastDismissTimer);
       toastDismissTimer = window.setTimeout(() => {
-        if (toast && toast.parentNode) {
-          toast.remove();
-        }
+        unmountCornerPopup(toast);
       }, 1500);
     });
     toast.appendChild(undoBtn);
   }
 
+  // Mount cleanly into the universal bottom-right corner stack
+  mountCornerPopup(toast);
+
   const startDismiss = (delay: number) => {
     if (toastDismissTimer) clearTimeout(toastDismissTimer);
     toastDismissTimer = window.setTimeout(() => {
-      if (toast && toast.parentNode) {
-        toast.remove();
-      }
+      unmountCornerPopup(toast);
     }, delay);
   };
 
@@ -178,4 +185,5 @@ export function showSmashedToast(msg: string, onUndo?: () => void): void {
 
   startDismiss(onUndo ? 4500 : 2500);
 }
+
 

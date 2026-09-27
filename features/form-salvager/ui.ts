@@ -4,6 +4,8 @@
  * 100% XSS-Safe: strictly uses DOM APIs and textContent (no innerHTML).
  */
 
+import { mountCornerPopup, unmountCornerPopup } from '../../content/corner-stack';
+
 const STYLE_ID = 'zenweb-form-salvager-styles';
 const SITE_PROMPT_CLASS = 'zw-salvage-site-prompt';
 
@@ -137,10 +139,6 @@ export function injectFormSalvagerStyles(): void {
 
     .${SITE_PROMPT_CLASS} {
       all: initial;
-      position: fixed !important;
-      bottom: 24px !important;
-      right: 24px !important;
-      z-index: 2147483647 !important;
       display: flex !important;
       flex-direction: column !important;
       gap: 9px !important;
@@ -390,7 +388,7 @@ export function showSiteRestorePrompt(options: SitePromptOptions): HTMLElement |
   const prompt = document.createElement('div');
   prompt.className = SITE_PROMPT_CLASS;
   prompt.setAttribute('role', 'alertdialog');
-  prompt.setAttribute('aria-label', 'ZenWeb detected unsubmitted form data for this site');
+  prompt.setAttribute('aria-label', 'Detected unsubmitted form data for this site');
 
   // Header
   const header = document.createElement('div');
@@ -484,7 +482,7 @@ export function showSiteRestorePrompt(options: SitePromptOptions): HTMLElement |
   prompt.appendChild(body);
   prompt.appendChild(actions);
 
-  document.body.appendChild(prompt);
+  mountCornerPopup(prompt);
   activeSitePrompt = prompt;
 
   return prompt;
@@ -492,7 +490,9 @@ export function showSiteRestorePrompt(options: SitePromptOptions): HTMLElement |
 
 export function dismissSiteRestorePrompt(immediate = false): void {
   if (immediate) {
-    document.querySelectorAll(`.${SITE_PROMPT_CLASS}`).forEach((el) => el.remove());
+    document.querySelectorAll(`.${SITE_PROMPT_CLASS}`).forEach((el) => {
+      unmountCornerPopup(el as HTMLElement);
+    });
     activeSitePrompt = null;
     return;
   }
@@ -503,7 +503,7 @@ export function dismissSiteRestorePrompt(immediate = false): void {
     const el = activeSitePrompt;
     activeSitePrompt = null;
     setTimeout(() => {
-      el.remove();
+      unmountCornerPopup(el);
     }, 200);
   }
 }

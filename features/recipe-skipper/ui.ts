@@ -6,6 +6,7 @@
  */
 
 import { ExtractedRecipe } from '../../types';
+import { mountCornerPopup, unmountCornerPopup } from '../../content/corner-stack';
 
 const STYLE_ID = 'zenweb-recipe-skipper-styles';
 const BTN_ID = 'zw-jump-to-recipe-btn';
@@ -29,10 +30,6 @@ export function injectRecipeSkipperStyles(): void {
 
     #${BTN_ID} {
       all: initial;
-      position: fixed !important;
-      bottom: 24px !important;
-      right: 24px !important;
-      z-index: 2147483640 !important;
       display: inline-flex !important;
       align-items: center !important;
       gap: 8px !important;
@@ -41,7 +38,7 @@ export function injectRecipeSkipperStyles(): void {
       backdrop-filter: saturate(180%) blur(20px) !important;
       -webkit-backdrop-filter: saturate(180%) blur(20px) !important;
       color: #ffffff !important;
-      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", sans-serif !important;
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Inter", system-ui, sans-serif !important;
       font-size: 13px !important;
       font-weight: 600 !important;
       line-height: 1 !important;
@@ -52,6 +49,7 @@ export function injectRecipeSkipperStyles(): void {
       user-select: none !important;
       transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s ease, border-color 0.2s ease !important;
       animation: zwJumpBtnEnter 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards !important;
+      box-sizing: border-box !important;
     }
 
     #${BTN_ID}:hover {
@@ -263,7 +261,7 @@ export function showJumpToRecipeButton(onJump: () => void, hasStructuredRecipe =
     onJump();
   });
 
-  document.body.appendChild(btn);
+  mountCornerPopup(btn);
 }
 
 export function showRecipeReaderModal(recipe: ExtractedRecipe, onScrollToOriginal?: () => void): HTMLElement {
@@ -396,7 +394,7 @@ export function showRecipeReaderModal(recipe: ExtractedRecipe, onScrollToOrigina
   const brandInfo = document.createElement('span');
   brandInfo.style.fontSize = '12px';
   brandInfo.style.color = '#86868b';
-  brandInfo.textContent = 'ZenWeb Distraction-Free Reader';
+  brandInfo.textContent = 'Distraction-Free Reader';
 
   const actionGroup = document.createElement('div');
   actionGroup.style.display = 'flex';
@@ -447,7 +445,7 @@ export function closeRecipeReaderModal(): void {
 export function removeRecipeSkipperUI(): void {
   closeRecipeReaderModal();
   const btn = document.getElementById(BTN_ID);
-  if (btn) btn.remove();
+  if (btn) unmountCornerPopup(btn);
   const style = document.getElementById(STYLE_ID);
   if (style) style.remove();
 }

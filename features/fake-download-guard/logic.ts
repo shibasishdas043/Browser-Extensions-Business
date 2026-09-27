@@ -5,7 +5,7 @@
  * on genuine software downloads, external CDNs, and business app exports.
  */
 
-import { quarantineElement, removeAllQuarantines, injectGuardStyles, illuminateRealButton, removeAllBeacons } from './ui';
+import { quarantineElement, removeAllQuarantines, injectGuardStyles, illuminateRealButton, removeAllBeacons, QUARANTINE_ATTR, OVERRIDE_ATTR } from './ui';
 import { recordProtectionEvent } from '../../content/storage';
 
 // Known binary, archive, disk image, installer, package, and media extensions that signal a legitimate download link
@@ -18,7 +18,47 @@ export const DOCUMENT_EXPORT_REGEX =
 
 // Commercial affiliate, ad-network, and click-tracking query parameters
 export const COMMERCIAL_TRACKER_PARAMS_REGEX =
-  /[?&](click_id|aff_id|affiliate_id|utm_campaign|utm_medium=cpc|subid|sub_id|subid2|ad_id|ad_url|track_id|redirect_url|target_url|ad_click|zoneid|zone_id|pubid|pub_id|creative_id|campaign_id|placement_id|gclid|fbclid|msclkid|ttclid)=/i;
+  /[?&](click_id|aff_id|affiliate_id|affiliate|aff_sub|utm_campaign|utm_medium=cpc|subid|sub_id|subid2|ad_id|ad_url|track_id|redirect_url|target_url|ad_click|zoneid|zone_id|pubid|pub_id|creative_id|campaign_id|placement_id|gclid|fbclid|msclkid|ttclid|partner_id|site_id|ad_type|clkid|ref_id|ref_src)=/i;
+
+// Suspicious ad redirect / tracker URL path segments
+export const SUSPICIOUS_REDIRECT_PATH_REGEX =
+  /\/(affiliate|click|clk|track|adclick|ad_click|popunder|redirect|goto|out|jump|away|link_tracker|sponsored)\b/i;
+
+// Major recognized software repositories and global distribution CDNs
+const TRUSTED_SOFTWARE_HOSTS = [
+  'github.com',
+  'githubusercontent.com',
+  'gitlab.com',
+  'sourceforge.net',
+  'archive.org',
+  'google.com',
+  'googleapis.com',
+  'googleusercontent.com',
+  'microsoft.com',
+  'apple.com',
+  'mozilla.org',
+  'apache.org',
+  'debian.org',
+  'ubuntu.com',
+  'archlinux.org',
+  'fedoraproject.org',
+  'pypi.org',
+  'npmjs.org',
+  'npmjs.com',
+  'rubygems.org',
+  'docker.com',
+  'mediafire.com',
+  'mega.nz',
+];
+
+export function isTrustedSoftwareHost(hostname: string): boolean {
+  if (!hostname) return false;
+  const host = hostname.toLowerCase();
+  return (
+    TRUSTED_SOFTWARE_HOSTS.some((th) => host === th || host.endsWith('.' + th)) ||
+    /\.(cloudfront\.net|akamaihd\.net|fastly\.net|azureedge\.net|blob\.core\.windows\.net|s3\.amazonaws\.com|s3-.*\.amazonaws\.com|cdn77\.org|b-cdn\.net|backblazeb2\.com)$/i.test(host)
+  );
+}
 
 // Multi-language download bait and high-urgency copywriting phrases
 export const DOWNLOAD_BAIT_REGEX =
@@ -194,16 +234,50 @@ export function peelRealDownloadUrl(rawUrl: string, el?: HTMLElement | null): st
  */
 export function isTransparentClickOverlay(el: HTMLElement): boolean {
   try {
+    // Never flag extension's own elements
+    if (el.id?.startsWith('zw-') || (typeof el.className === 'string' && el.className.includes('zw-'))) {
+      return false;
+    }
+    // Never flag document roots
+    if (el === document.body || el === document.documentElement) {
+      return false;
+    }
+
     const style = typeof window !== 'undefined' && window.getComputedStyle ? window.getComputedStyle(el) : null;
     if (!style) return false;
-    const opacity = parseFloat(style.opacity || '1');
-    const zIndex = parseInt(style.zIndex || '0', 10);
+
     const isAbsoluteOrFixed = style.position === 'absolute' || style.position === 'fixed';
-    if (isAbsoluteOrFixed && opacity < 0.1 && zIndex >= 1000) {
-      const rect = el.getBoundingClientRect();
-      if (rect.width >= 200 && rect.height >= 200) {
-        return true;
-      }
+    if (!isAbsoluteOrFixed) return false;
+
+    const zIndex = parseInt(style.zIndex || '0', 10);
+    const opacity = parseFloat(style.opacity || '1');
+    const bg = style.backgroundColor || '';
+    const isTransparentBg =
+      bg === 'transparent' ||
+      bg === 'rgba(0, 0, 0, 0)' ||
+      bg.endsWith(', 0)') ||
+      style.visibility === 'hidden' ||
+      opacity < 0.1;
+
+    // Has no visible text content
+    const textLen = (el.textContent || '').trim().length;
+    if (textLen > 20) return false;
+
+    // Has no visible image with source
+    const hasVisibleImg = el.querySelector('img[src]:not([src=""])');
+    if (hasVisibleImg) return false;
+
+    // Covers a significant area of the viewport
+    const rect = el.getBoundingClientRect();
+    const vpW = typeof window !== 'undefined' ? window.innerWidth : 800;
+    const vpH = typeof window !== 'undefined' ? window.innerHeight : 600;
+
+    const coversViewport =
+      (rect.width >= vpW * 0.5 && rect.height >= vpH * 0.5) ||
+      (rect.width >= 300 && rect.height >= 300);
+
+    if (coversViewport && isTransparentBg && (zIndex >= 10 || isNaN(zIndex))) {
+      return true;
     }
   } catch {}
   return false;
@@ -254,41 +328,125 @@ export class FakeDownloadGuard {
   }
 
   /**
-   * Intercepts clicks in the capture phase to peel cloaked download/magnet links
-   * and bypass middleman ad popunders cleanly.
+   * Intercepts clicks and middle-clicks in the capture phase to neutralize fake downloads,
+   * block deceptive new tab forwards, dismantle clickjacking overlays, and cleanly
+   * launch legitimate files without popunders.
    */
   private handleDownloadClick = (e: MouseEvent): void => {
     let target = e.target as HTMLElement | null;
+    if (!target) return;
+
+    // Skip extension's own UI elements
+    if (target.id?.startsWith('zw-') || (typeof target.className === 'string' && target.className.includes('zw-'))) {
+      return;
+    }
+
+    // 1. Quarantined element click -> Block completely
+    const quarantinedAncestor = target.closest(`[${QUARANTINE_ATTR}="true"]`) as HTMLElement | null;
+    if (quarantinedAncestor && quarantinedAncestor.getAttribute(OVERRIDE_ATTR) !== 'true') {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      return;
+    }
+
+    // 2. Transparent clickjacking overlay -> Defuse, remove from DOM, and block click
+    if (isTransparentClickOverlay(target)) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      target.remove();
+      recordProtectionEvent('fakeDownloadsDefused', 1).catch(() => {});
+      return;
+    }
+
+    // 3. Ad container click -> Block completely
+    const adContainer = target.closest(AD_CONTAINER_SELECTORS.join(','));
+    if (adContainer && adContainer.getAttribute(OVERRIDE_ATTR) !== 'true') {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      return;
+    }
+
+    // 4. Find the closest clickable ancestor (<a>, <button>, [role="button"], etc.)
     let clickable: HTMLElement | null = null;
     const docBody = typeof document !== 'undefined' ? document.body : null;
     const docEl = typeof document !== 'undefined' ? document.documentElement : null;
-
-    while (target && target !== docBody && target !== docEl) {
-      const tag = target.tagName.toLowerCase();
+    let curr: HTMLElement | null = target;
+    while (curr && curr !== docBody && curr !== docEl) {
+      const tag = curr.tagName.toLowerCase();
       if (
         tag === 'a' ||
         tag === 'button' ||
-        target.getAttribute('role') === 'button' ||
-        target.hasAttribute('data-magnet') ||
-        target.hasAttribute('data-url') ||
-        target.hasAttribute('data-href')
+        curr.getAttribute('role') === 'button' ||
+        curr.hasAttribute('data-magnet') ||
+        curr.hasAttribute('data-url') ||
+        curr.hasAttribute('data-href') ||
+        curr.getAttribute('onclick')
       ) {
-        clickable = target;
+        clickable = curr;
         break;
       }
-      target = target.parentElement;
+      curr = curr.parentElement;
     }
 
     if (!clickable) return;
+    if (clickable.getAttribute(OVERRIDE_ATTR) === 'true') return;
+
     const href = (clickable as HTMLAnchorElement).href || clickable.getAttribute('href') || '';
 
-    // Check if this element or its href has a cloaked direct file or magnet link
+    // 5. On-the-fly trap evaluation before allowing click to proceed
+    const evaluation = this.evaluateElement(clickable);
+    if (evaluation.isTrap) {
+      e.preventDefault();
+      e.stopPropagation();
+      e.stopImmediatePropagation();
+      quarantineElement(clickable, evaluation.reason);
+      recordProtectionEvent('fakeDownloadsDefused', 1).catch(() => {});
+      return;
+    }
+
+    // 6. Check if this element or its href has a cloaked direct file or magnet link
     const peeled = peelRealDownloadUrl(href, clickable);
     if (peeled && peeled !== href) {
       e.preventDefault();
+      e.stopPropagation();
       e.stopImmediatePropagation();
       console.log('[ZenWeb] Bypassed middleman ad redirect, launching genuine URL:', peeled);
+      // Launch in current window so no empty or ad new-tab is opened
       window.location.href = peeled;
+      return;
+    }
+
+    // 7. Block new-tab forward if anchor target is _blank and points to an ad/redirect or cross-origin download bait
+    if (clickable.tagName.toLowerCase() === 'a') {
+      const link = clickable as HTMLAnchorElement;
+      const targetAttr = link.getAttribute('target');
+      if (targetAttr === '_blank' && href && !href.startsWith('#') && !href.startsWith('javascript:')) {
+        try {
+          const currentHost = typeof window !== 'undefined' && window.location ? window.location.hostname : 'localhost';
+          const targetUrl = new URL(href, window.location.href);
+          const targetHost = targetUrl.hostname.toLowerCase();
+          const isSameOrg = getRegistrableBaseDomain(targetHost) === getRegistrableBaseDomain(currentHost);
+
+          if (!isSameOrg && !isTrustedSoftwareHost(targetHost)) {
+            const text = (link.textContent || '').trim();
+            const hasBait = DOWNLOAD_BAIT_REGEX.test(text) || COMMERCIAL_TRACKER_PARAMS_REGEX.test(href) || SUSPICIOUS_REDIRECT_PATH_REGEX.test(targetUrl.pathname);
+            const hasMetadata = hasNearbyFileMetadata(link);
+
+            // Cross-origin new tab with download bait or trackers and no verified file metadata
+            if (hasBait && !hasMetadata) {
+              e.preventDefault();
+              e.stopPropagation();
+              e.stopImmediatePropagation();
+              quarantineElement(link, 'New Tab Ad Forward');
+              recordProtectionEvent('fakeDownloadsDefused', 1).catch(() => {});
+              return;
+            }
+          }
+        } catch {}
+      }
     }
   };
 
@@ -296,12 +454,14 @@ export class FakeDownloadGuard {
     if (this.clickSentryAttached || typeof window === 'undefined') return;
     this.clickSentryAttached = true;
     window.addEventListener('click', this.handleDownloadClick, { capture: true });
+    window.addEventListener('auxclick', this.handleDownloadClick, { capture: true });
   }
 
   private detachClickSentry(): void {
     if (!this.clickSentryAttached || typeof window === 'undefined') return;
     this.clickSentryAttached = false;
     window.removeEventListener('click', this.handleDownloadClick, { capture: true });
+    window.removeEventListener('auxclick', this.handleDownloadClick, { capture: true });
   }
 
   /**
@@ -331,6 +491,18 @@ export class FakeDownloadGuard {
       const candidates = document.querySelectorAll<HTMLElement>(
         'a[href], button, [role="button"], iframe, ins.adsbygoogle, img'
       );
+
+      // Scan and defuse clickjacking transparent overlays
+      const overlayCandidates = document.querySelectorAll<HTMLElement>(
+        'div[style*="fixed" i], div[style*="absolute" i], div[class*="overlay" i], div[class*="popunder" i], div[id*="overlay" i]'
+      );
+      overlayCandidates.forEach((el) => {
+        if (el.id?.startsWith('zw-') || (typeof el.className === 'string' && el.className.includes('zw-'))) return;
+        if (isTransparentClickOverlay(el)) {
+          el.remove();
+          newlyDefusedCount++;
+        }
+      });
 
       candidates.forEach((el) => {
         // Skip extension's own UI elements
@@ -475,40 +647,59 @@ export class FakeDownloadGuard {
           const isSameOrganization = currentBaseDomain === targetBaseDomain;
           const isSameHost = targetHost === currentHost || targetHost.endsWith('.' + currentHost);
 
-          // Direct genuine binary / archive file target
-          const hasDirectFile = REAL_FILE_REGEX.test(targetUrl.pathname) || link.hasAttribute('download');
-          if (hasDirectFile) {
-            legitScore += 50;
-          }
+          // Direct genuine binary / archive file target validation
+          const isDirectFile = REAL_FILE_REGEX.test(targetUrl.pathname);
+          const hasDownloadAttr = link.hasAttribute('download');
+          const isTrustedHost = isTrustedSoftwareHost(targetHost);
+          const hasMetadata = hasNearbyFileMetadata(link);
 
-          if (link.hasAttribute('download')) {
-            legitScore += 40;
+          // Direct file is ONLY legitimate if on same origin/org, trusted software host, or accompanied by nearby file specifications
+          if (isDirectFile || hasDownloadAttr) {
+            if (isSameHost || isSameOrganization || isTrustedHost || hasMetadata) {
+              legitScore += 50;
+              if (hasDownloadAttr) legitScore += 20;
+            } else {
+              // Cross-origin direct file on an unknown host with NO metadata is a classic malware dropper/adware pattern
+              trapScore += 50;
+              dominantTrapReason = 'Untrusted Third-Party Download';
+            }
           }
 
           // Same-origin or same organization mirror
           if (isSameHost || isSameOrganization) {
             legitScore += 40;
+          } else if (isTrustedHost) {
+            legitScore += 35;
           }
 
           // Designated software release route
           if (/\/(download|downloads|dl|get|releases|files|file|installer)\//i.test(targetUrl.pathname)) {
-            legitScore += 30;
+            legitScore += 25;
           }
 
-          // Commercial click-tracking parameters
-          const hasCommercialTracker = COMMERCIAL_TRACKER_PARAMS_REGEX.test(href);
+          // Commercial click-tracking parameters or suspicious redirect paths
+          const hasCommercialTracker =
+            COMMERCIAL_TRACKER_PARAMS_REGEX.test(href) ||
+            SUSPICIOUS_REDIRECT_PATH_REGEX.test(targetUrl.pathname);
           if (hasCommercialTracker) {
             trapScore += 50;
             dominantTrapReason = 'Click-Tracking Ad Trap';
           }
 
-          // Cross-origin disconnect with no direct file
+          // Cross-origin disconnect analysis
           const isCrossOrigin = !isSameHost && !isSameOrganization;
-          if (isCrossOrigin) {
-            if (!hasDirectFile && (hasDownloadKeyword || hasBaitImage)) {
-              trapScore += 40;
+          if (isCrossOrigin && !isTrustedHost) {
+            if (!hasMetadata && (hasDownloadKeyword || hasBaitImage)) {
+              trapScore += 45;
               if (dominantTrapReason === 'Fake Download') {
                 dominantTrapReason = 'Cross-Origin Ad Trap';
+              }
+            }
+
+            // Target _blank on cross-origin download bait opens unwanted ad tabs
+            if (link.target === '_blank' || link.getAttribute('target') === '_blank') {
+              if (hasDownloadKeyword || hasBaitImage || hasCommercialTracker) {
+                trapScore += 25;
               }
             }
           }
@@ -562,13 +753,13 @@ export class FakeDownloadGuard {
     }
 
     // ── Decision Boundary ──
-    // Rule 1: High Legitimate Immunity (Real download button on CDN or with metadata)
-    if (legitScore >= 50 && !isInsideAdContainer) {
+    // Rule 1: High Legitimate Immunity (Real download button on CDN, same org, or with metadata, without ad markers)
+    if (legitScore >= 50 && !isInsideAdContainer && trapScore < 50) {
       return { isTrap: false, reason: '', legitScore, trapScore };
     }
 
     // Rule 2: Confirmed Trap Boundary
-    const isTrap = trapScore >= 70 && (trapScore - legitScore) >= 40;
+    const isTrap = (trapScore >= 60 && (trapScore - legitScore) >= 25) || trapScore >= 80;
 
     return {
       isTrap,
@@ -601,7 +792,7 @@ export class FakeDownloadGuard {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['src', 'href', 'class'],
+      attributeFilter: ['src', 'href', 'class', 'target'],
     });
   }
 }

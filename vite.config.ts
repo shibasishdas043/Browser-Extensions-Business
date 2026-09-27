@@ -18,6 +18,14 @@ function copyAssetsPlugin(): Plugin {
       if (existsSync(fontsSrc)) {
         cpSync(fontsSrc, fontsDest, { recursive: true });
       }
+
+      ['16x16.png', '32x32.png', '48x48.png', '128x128.png'].forEach((icon) => {
+        const iconSrc = fileURLToPath(new URL(`./assets/${icon}`, import.meta.url));
+        const iconDest = fileURLToPath(new URL(`./dist/assets/${icon}`, import.meta.url));
+        if (existsSync(iconSrc)) {
+          copyFileSync(iconSrc, iconDest);
+        }
+      });
     },
   };
 }
