@@ -5,7 +5,7 @@ import { ScrollToPlugin } from 'gsap/ScrollToPlugin';
 import {
   Shield, ShieldCheck, ShieldAlert,
   Clock, Search, PinOff, VideoOff, ChefHat,
-  Hammer, AlertTriangle, FileText, Lock,
+  AlertTriangle, FileText, Lock,
   Sparkles, Check, RotateCcw,
   Heart, Coffee, ExternalLink, Archive, Copy, Trash2, X, CheckCircle2,
   Globe, Download, Upload, Command, Plus, Layers,
@@ -44,7 +44,6 @@ const PROTECTIONS: ProtectionItem[] = [
   { key: 'floatingVideoKillerEnabled',statKey: 'videosSuppressed',    category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Sticky Video Suppressor',       description: 'Stops annoying floating video ads that follow you as you scroll.',                           targetScope: 'News & Media Outlets',    icon: VideoOff,      statUnit: 'floating players silenced'},
   { key: 'recipeSkipperEnabled',     statKey: 'recipesSkipped',       category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Recipe Story Fluff Skipper',   description: 'Skips long life stories and jumps straight to the recipe ingredients.',                      targetScope: 'Food & Cooking Sites',    icon: ChefHat,       statUnit: 'stories skipped'          },
   { key: 'recipeReaderEnabled',      statKey: 'recipesSkipped',       category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Recipe Reader View',           description: 'Opens a clean reader with ingredient checklists and clear steps.',                           targetScope: 'Food & Cooking Sites',    icon: ChefHat,       statUnit: 'clean views generated'    },
-  { key: 'autoOverlaySmasherEnabled',statKey: 'overlaysSmashed',      category: 'browsing', categoryLabel: 'Reading & Media',    name: 'Modal & Paywall Smasher',      description: 'Closes newsletter popups, removes blur, and restores scrolling.',                            targetScope: 'All Webpages',            icon: Hammer,        statUnit: 'modals neutralized'       },
 ];
 
 const CATEGORY_TABS = [
@@ -188,7 +187,7 @@ function WebsiteFavicon({ domain, size = 18 }: { domain: string; size?: number }
 export function Dashboard() {
   /* state */
   const [settings, setSettings]         = useState<ZenWebSettings>(DEFAULT_SETTINGS);
-  const [stats,    setStats]            = useState<ProtectionStats>({ seoSpamFiltered:0, pinterestHidden:0, videosSuppressed:0, recipesSkipped:0, overlaysSmashed:0, fakeDownloadsDefused:0, formsBackedUp:0, totalTimeSavedSeconds:0 });
+  const [stats,    setStats]            = useState<ProtectionStats>({ seoSpamFiltered:0, pinterestHidden:0, videosSuppressed:0, recipesSkipped:0, fakeDownloadsDefused:0, formsBackedUp:0, totalTimeSavedSeconds:0 });
   const [activeCategory, setActiveCategory] = useState<'all'|'search'|'browsing'|'security'>('all');
   const [toastMsg, setToastMsg]         = useState<string|null>(null);
   const [donationTier, setDonationTier] = useState<number>(5);
@@ -681,7 +680,7 @@ export function Dashboard() {
     (p) => settings.masterEnabled && settings[p.key] === true
   ).length;
   const total = stats.seoSpamFiltered + stats.pinterestHidden + stats.videosSuppressed +
-                stats.recipesSkipped + stats.overlaysSmashed + stats.fakeDownloadsDefused +
+                stats.recipesSkipped + stats.fakeDownloadsDefused +
                 stats.formsBackedUp;
 
   /* ── render ── */
@@ -793,7 +792,7 @@ export function Dashboard() {
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
             <StatCard label="Time Saved"          value={formatTimeSaved(stats.totalTimeSavedSeconds)} rawValue={stats.totalTimeSavedSeconds} sub="~15s avg per block"                                           icon={<Clock      style={{ width: 15, height: 15, color: cv('--zw-text-link') }} />} isTime />
             <StatCard label="Search Cleaned"      value={null} rawValue={stats.seoSpamFiltered + stats.pinterestHidden}                                   sub={`${stats.seoSpamFiltered} SEO · ${stats.pinterestHidden} Pinterest`}           icon={<Search     style={{ width: 15, height: 15, color: cv('--zw-text-link') }} />} />
-            <StatCard label="Intrusions Blocked"  value={null} rawValue={stats.overlaysSmashed + stats.videosSuppressed}                                  sub={`${stats.overlaysSmashed} modals · ${stats.videosSuppressed} videos`}          icon={<Hammer     style={{ width: 15, height: 15, color: cv('--zw-text-link') }} />} />
+            <StatCard label="Intrusions Blocked"  value={null} rawValue={stats.fakeDownloadsDefused + stats.videosSuppressed}                             sub={`${stats.fakeDownloadsDefused} traps · ${stats.videosSuppressed} videos`}     icon={<ShieldAlert style={{ width: 15, height: 15, color: cv('--zw-text-link') }} />} />
             <StatCard label="Total Events"        value={null} rawValue={total}                                                                           sub={`${stats.recipesSkipped} recipes · ${stats.formsBackedUp} forms`}             icon={<Sparkles   style={{ width: 15, height: 15, color: cv('--zw-text-link') }} />} />
           </div>
         </section>
@@ -1227,17 +1226,11 @@ export function Dashboard() {
                 </div>
               </div>
               <p style={{ fontSize: 14, color: cv('--zw-text-secondary'), lineHeight: 1.43, margin: 0 }}>
-                Trigger instant shields, bypass modal locks, and open clean reading modes from anywhere.
+                Trigger instant shields, open clean reading modes, and recover form drafts from anywhere.
               </p>
             </div>
 
             <div className="flex flex-col gap-2 pt-4" style={{ borderTop: `1px solid ${cv('--zw-border-divider')}` }}>
-              <div className="flex items-center justify-between text-xs">
-                <span style={{ color: cv('--zw-text-secondary') }}>Panic Overlay Smash</span>
-                <kbd className="px-2 py-1 rounded-[6px] font-mono text-[11px] font-semibold" style={{ backgroundColor: cv('--zw-bg-scope'), border: `1px solid ${cv('--zw-border-scope')}`, color: cv('--zw-text-primary') }}>
-                  {shortcutOS === 'mac' ? '⌥ Option + ⇧ Shift + X' : 'Alt + Shift + X'}
-                </kbd>
-              </div>
               <div className="flex items-center justify-between text-xs">
                 <span style={{ color: cv('--zw-text-secondary') }}>Recipe Reader View</span>
                 <kbd className="px-2 py-1 rounded-[6px] font-mono text-[11px] font-semibold" style={{ backgroundColor: cv('--zw-bg-scope'), border: `1px solid ${cv('--zw-border-scope')}`, color: cv('--zw-text-primary') }}>

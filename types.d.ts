@@ -10,7 +10,6 @@ export interface ZenWebSettings {
   floatingVideoKillerEnabled: boolean;
   recipeSkipperEnabled: boolean;
   recipeReaderEnabled: boolean;
-  autoOverlaySmasherEnabled: boolean;
 
   // Security & Utilities
   fakeDownloadGuardEnabled: boolean;
@@ -48,7 +47,6 @@ export interface ProtectionStats {
   pinterestHidden: number;
   videosSuppressed: number;
   recipesSkipped: number;
-  overlaysSmashed: number;
   fakeDownloadsDefused: number;
   formsBackedUp: number;
   totalTimeSavedSeconds: number;
@@ -58,7 +56,6 @@ export type StatKey = keyof Omit<ProtectionStats, 'totalTimeSavedSeconds'>;
 
 export interface ExtensionMessage {
   action:
-    | 'SMASH_OVERLAY'
     | 'RESTORE_FORM'
     | 'GET_SETTINGS'
     | 'UPDATE_SETTINGS'

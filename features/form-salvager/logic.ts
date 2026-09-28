@@ -124,6 +124,322 @@ export function isSearchEngineSite(urlOrHost: string = typeof window !== 'undefi
   }
 }
 
+/**
+ * Detects whether a URL or hostname belongs to a media downloader, video converter,
+ * or link extraction tool (e.g. SaveIG, SnapInsta, FastDL, Y2Mate, SSSTik, etc.).
+ * Downloader tools take one-off pasted links and must NEVER be treated as form drafts.
+ */
+export function isDownloaderSite(urlOrHost: string = typeof window !== 'undefined' ? window.location.href : ''): boolean {
+  if (!urlOrHost) return false;
+  try {
+    const raw = urlOrHost.includes('://') ? new URL(urlOrHost).hostname : urlOrHost;
+    const host = raw.toLowerCase().replace(/^www\./, '');
+
+    const downloaderHosts = [
+      'saveig.app',
+      'snapinsta.app',
+      'snapinsta.to',
+      'fastdl.app',
+      'igdownloader.com',
+      'instasave.website',
+      'downloadgram.org',
+      'igram.world',
+      'sssinstagram.com',
+      'storiesig.info',
+      'storiesig.app',
+      'anonyig.com',
+      'toolzu.com',
+      'inflact.com',
+      'savefrom.net',
+      'savefrom.to',
+      'y2mate.com',
+      'y2mate.is',
+      'ssstik.io',
+      'snaptik.app',
+      'fdownloader.net',
+      'yt1s.com',
+      'ytdl.online',
+      'clipconverter.cc',
+      'save-insta.com',
+      'instaloader.com',
+      'snapsave.app',
+      'savethevideo.com',
+      'instavideosave.net',
+      'reelsave.app',
+      'storysaver.net',
+      'twdown.net',
+      'fbdown.net',
+      'savevideo.me',
+      'keepvid.ch',
+      'savemedia.website',
+      'savemp3.app',
+      'tiktokdownload.online',
+      'pinterestdownload.com',
+      'savepin.app',
+      'cobalt.tools',
+      'downsub.com',
+      'shorturl.at',
+      'tinyurl.com',
+      'bitly.com',
+    ];
+
+    if (downloaderHosts.some((d) => host === d || host.endsWith('.' + d))) {
+      return true;
+    }
+
+    if (
+      /(downloader|videosaver|savevideo|instasave|igsaver|tiktokdownload|ytdl|convert2mp3|snapinsta|saveig|fastdl|igram)/i.test(
+        host
+      )
+    ) {
+      return true;
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Detects whether an individual input element is a single link-pasting, URL converter,
+ * or media downloader input (e.g. "Paste Instagram URL", "Enter video link", etc.).
+ */
+export function isDownloaderOrLinkPasteField(el: HTMLElement): boolean {
+  if (isDownloaderSite()) return true;
+
+  if (el instanceof HTMLInputElement || el.tagName === 'INPUT') {
+    const inputType = (el.getAttribute('type') || (el as HTMLInputElement).type || 'text').toLowerCase();
+    if (!['text', 'url', 'search'].includes(inputType)) return false;
+  } else if (!(el instanceof HTMLTextAreaElement)) {
+    return false;
+  }
+
+  const placeholder = (el.getAttribute('placeholder') || '').toLowerCase();
+  const ariaLabel = (el.getAttribute('aria-label') || '').toLowerCase();
+  const title = (el.getAttribute('title') || '').toLowerCase();
+  const name = (el.getAttribute('name') || '').toLowerCase();
+  const id = (el.id || '').toLowerCase();
+  const className = (typeof el.className === 'string' ? el.className : '').toLowerCase();
+
+  const combinedMeta = `${placeholder} ${ariaLabel} ${title} ${name} ${id} ${className}`;
+
+  // 1. Explicit link-paste phrases in placeholder, aria-label, title, or id
+  const linkPasteRegex =
+    /(paste|insert|enter|input|drop)\s+(the\s+)?(instagram|ig|video|image|photo|reel|post|story|media|tiktok|youtube|yt|twitter|x|facebook|fb|thread|pinterest|soundcloud|spotify|file|direct)?\s*(url|link)/i;
+  if (linkPasteRegex.test(combinedMeta)) {
+    return true;
+  }
+
+  const genericPasteRegex =
+    /(paste\s+(url|link|here|valid\s+link)|paste-link|paste-url|insert\s+link|enter\s+link|enter\s+url)/i;
+  if (genericPasteRegex.test(combinedMeta)) {
+    return true;
+  }
+
+  // 2. Downloader / Converter identifier
+  const downloaderIdRegex =
+    /(download[-_]?url|video[-_]?url|media[-_]?url|paste[-_]?url|link[-_]?input|url[-_]?input|target[-_]?url|get[-_]?link|download[-_]?link|ig[-_]?url|insta[-_]?url|tiktok[-_]?url|yt[-_]?url|url[-_]?paste)/i;
+  if (downloaderIdRegex.test(combinedMeta)) {
+    return true;
+  }
+
+  // 3. Check closest form / wrapper for download/convert action when field name is simply 'url' or 'link'
+  if (name === 'url' || name === 'link' || id === 'url' || id === 'link' || id === 's_input') {
+    const parentContainer = el.closest(
+      'form, div[class*="search" i], div[class*="download" i], div[class*="convert" i], main, section'
+    );
+    if (parentContainer) {
+      const containerText = (parentContainer.textContent || '').slice(0, 500).toLowerCase();
+      if (/(download|convert|fetch|paste\s*(&\s*download)?|grab\s+video|get\s+video)/i.test(containerText)) {
+        return true;
+      }
+    }
+  }
+
+  // 4. Surrounding buttons: If the immediate form/wrapper contains a Download/Convert/Paste button
+  const formOrWrapper = el.closest('form, fieldset, [role="form"]') || el.parentElement;
+  if (formOrWrapper) {
+    const buttons = Array.from(formOrWrapper.querySelectorAll('button, input[type="submit"], [role="button"]'));
+    const hasDownloadBtn = buttons.some((btn) => {
+      const btnText = (btn.textContent || (btn as HTMLInputElement).value || '').trim().toLowerCase();
+      return /^(download|convert|fetch|get\s+video|paste|download\s+now|start|generate\s+link)$/i.test(btnText);
+    });
+    if (hasDownloadBtn) {
+      const inputs = Array.from(
+        formOrWrapper.querySelectorAll(
+          'input:not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]), textarea, select'
+        )
+      );
+      if (inputs.length <= 2) {
+        return true;
+      }
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Resolves the logical form boundary for an element.
+ */
+export function getEnclosingFormScope(el: HTMLElement): HTMLElement | null {
+  if ('form' in el && (el as HTMLInputElement).form instanceof HTMLElement) {
+    return (el as HTMLInputElement).form;
+  }
+
+  const closestForm = el.closest<HTMLElement>('form, fieldset');
+  if (closestForm) return closestForm;
+
+  const semanticForm = el.closest<HTMLElement>('[role="form"], [role="dialog"], dialog');
+  if (semanticForm) return semanticForm;
+
+  let curr = el.parentElement;
+  let fallbackContainer: HTMLElement | null = null;
+  let depth = 0;
+
+  while (curr && curr !== document.body && curr !== document.documentElement && depth < 6) {
+    const cls = (typeof curr.className === 'string' ? curr.className : '').toLowerCase();
+    const id = (curr.id || '').toLowerCase();
+    const role = (curr.getAttribute('role') || '').toLowerCase();
+
+    if (
+      role === 'form' ||
+      /form|checkout|register|signup|contact|profile|survey|settings|ticket|application|editor|compose|modal|card/i.test(
+        `${id} ${cls}`
+      )
+    ) {
+      return curr;
+    }
+
+    if (!fallbackContainer && depth >= 2) {
+      fallbackContainer = curr;
+    }
+
+    curr = curr.parentElement;
+    depth++;
+  }
+
+  return fallbackContainer || el.closest<HTMLElement>('main, article, section') || el.parentElement;
+}
+
+const formEligibilityCache = new WeakMap<HTMLElement, { eligible: boolean; expires: number }>();
+
+/**
+ * Evaluates whether an element belongs to a legitimate form containing multiple
+ * various types of input fields.
+ *
+ * Requirements:
+ * 1. Must NOT be on a search engine or media downloader site.
+ * 2. Must NOT be an isolated single link-pasting or downloader input.
+ * 3. Form scope must contain MULTIPLE (>= 2) distinct user-fillable fields.
+ * 4. The form must exhibit VARIOUS input types:
+ *    - Multiple distinct FieldKinds (e.g. text + textarea, text + select, text + checkbox, text + radio, temporal, etc.), OR
+ *    - Multiple distinct HTML input types (e.g. text + email, text + tel, text + number, text + date), OR
+ *    - A comprehensive multi-field form with >= 3 distinct user-fillable fields.
+ */
+export function isEligibleMultiFieldForm(el: HTMLElement): boolean {
+  if (isSearchEngineSite() || isDownloaderSite()) return false;
+  if (isDownloaderOrLinkPasteField(el)) return false;
+
+  const cached = formEligibilityCache.get(el);
+  const now = Date.now();
+  if (cached && now < cached.expires) {
+    return cached.eligible;
+  }
+
+  const result = checkFormEligibility(el);
+  formEligibilityCache.set(el, { eligible: result, expires: now + 3000 });
+  return result;
+}
+
+function checkFormEligibility(el: HTMLElement): boolean {
+  const scope = getEnclosingFormScope(el);
+  if (!scope) return false;
+
+  const rawElements = Array.from(
+    scope.querySelectorAll<HTMLElement>(
+      'input, textarea, select, [contenteditable="true"], [role="textbox"], .subjects-auto-complete__control, #subjectsContainer'
+    )
+  );
+
+  const validElements: HTMLElement[] = [];
+  const radioGroupsSeen = new Set<string>();
+  const checkboxGroupsSeen = new Set<string>();
+
+  for (const field of rawElements) {
+    if (field instanceof HTMLInputElement) {
+      const type = (field.type || 'text').toLowerCase();
+      if (['submit', 'button', 'reset', 'image', 'file', 'hidden'].includes(type)) {
+        continue;
+      }
+    }
+    if (field.tagName === 'BUTTON') continue;
+
+    if (field.hasAttribute('disabled') || field.getAttribute('aria-hidden') === 'true') {
+      continue;
+    }
+
+    if (field.matches && field.matches('input[type="search"], [role="searchbox"]')) {
+      continue;
+    }
+    if (isDownloaderOrLinkPasteField(field)) {
+      continue;
+    }
+
+    // Group radios by name so an entire radio group counts as 1 logical field
+    if (field instanceof HTMLInputElement && field.type === 'radio') {
+      const name = field.name || field.id;
+      if (name) {
+        if (radioGroupsSeen.has(name)) continue;
+        radioGroupsSeen.add(name);
+      }
+    }
+
+    // Group checkbox arrays by name (e.g. interests[])
+    if (field instanceof HTMLInputElement && field.type === 'checkbox') {
+      const name = field.name;
+      if (name && name.endsWith('[]')) {
+        if (checkboxGroupsSeen.has(name)) continue;
+        checkboxGroupsSeen.add(name);
+      }
+    }
+
+    validElements.push(field);
+  }
+
+  // Condition 1: Form MUST have multiple fields (count >= 2)
+  if (validElements.length < 2) {
+    return false;
+  }
+
+  // Condition 2: Form MUST exhibit various types of input fields
+  const distinctKinds = new Set<FieldKind>();
+  const distinctHtmlTypes = new Set<string>();
+
+  for (const field of validElements) {
+    const kind = classifyField(field);
+    if (kind) distinctKinds.add(kind);
+
+    if (field instanceof HTMLInputElement) {
+      distinctHtmlTypes.add((field.type || 'text').toLowerCase());
+    } else if (field instanceof HTMLTextAreaElement) {
+      distinctHtmlTypes.add('textarea');
+    } else if (field instanceof HTMLSelectElement) {
+      distinctHtmlTypes.add('select');
+    } else if (field.isContentEditable || field.getAttribute('role') === 'textbox') {
+      distinctHtmlTypes.add('contenteditable');
+    }
+  }
+
+  const hasVariousTypes =
+    distinctKinds.size >= 2 ||
+    distinctHtmlTypes.size >= 2 ||
+    validElements.length >= 3;
+
+  return hasVariousTypes;
+}
+
 /* ── Custom Dropdown & React-Select Automation Helpers ── */
 
 export function getCustomDropdownContainer(el: HTMLElement): HTMLElement | null {
@@ -362,10 +678,11 @@ export class FormSalvager {
     this.isRunning = true;
 
     this.purgeExpiredDrafts().catch(() => {});
+    this.purgeInvalidDrafts().catch(() => {});
 
-    // Search engines (Google, Bing, DuckDuckGo, etc.) must NEVER salvage drafts or show restore prompts
-    if (isSearchEngineSite()) {
-      this.purgeSearchEngineDrafts().catch(() => {});
+    // Search engines & media downloader sites must NEVER salvage drafts or show restore prompts
+    if (isSearchEngineSite() || isDownloaderSite()) {
+      this.purgeInvalidDrafts().catch(() => {});
       removeAllRestorePills();
       return;
     }
@@ -677,7 +994,9 @@ export class FormSalvager {
    */
   public isSalvagableField(el: HTMLElement): boolean {
     if (isSearchEngineSite()) return false;
+    if (isDownloaderSite()) return false;
     if (this.isSearchField(el)) return false;
+    if (isDownloaderOrLinkPasteField(el)) return false;
 
     const kind = classifyField(el);
     if (!kind) return false;
@@ -701,6 +1020,11 @@ export class FormSalvager {
     }
 
     if (el.hasAttribute('data-private') || el.hasAttribute('data-secret') || el.hasAttribute('data-no-salvage')) {
+      return false;
+    }
+
+    // Must be part of a form with multiple various types of input fields
+    if (!isEligibleMultiFieldForm(el)) {
       return false;
     }
 
@@ -1753,17 +2077,37 @@ export class FormSalvager {
   }
 
   /**
-   * Purges all drafts saved for search engines from local storage.
+   * Purges all drafts saved for search engines and media downloader sites from local storage.
    */
   public async purgeSearchEngineDrafts(): Promise<void> {
+    await this.purgeInvalidDrafts();
+  }
+
+  /**
+   * Purges drafts saved for search engines and media downloader sites from storage.
+   */
+  public async purgeInvalidDrafts(): Promise<void> {
     try {
+      const isInvalidDraft = (draft: StoredDraft): boolean => {
+        const url = draft.url || draft.siteUrl || '';
+        if (isSearchEngineSite(url) || isDownloaderSite(url)) return true;
+        const meta = `${draft.fieldKey} ${draft.fieldLabel || ''} ${draft.pageTitle || ''}`.toLowerCase();
+        if (/(downloader|download[-_]?url|paste[-_]?url|s_input|ig[-_]?url|insta[-_]?url)/i.test(meta)) {
+          return true;
+        }
+        if (/^https?:\/\/(www\.)?(instagram|tiktok|youtube|youtu\.be)\.com?\//i.test(draft.value.trim()) && draft.wordCount <= 2) {
+          return true;
+        }
+        return false;
+      };
+
       if (typeof chrome !== 'undefined' && chrome.storage?.local) {
         const all = await chrome.storage.local.get(null);
         const keysToRemove: string[] = [];
         for (const [k, v] of Object.entries(all)) {
           if (k.startsWith(DRAFT_PREFIX) && v && typeof v === 'object') {
             const draft = v as StoredDraft;
-            if (isSearchEngineSite(draft.url || draft.siteUrl || '')) {
+            if (isInvalidDraft(draft)) {
               keysToRemove.push(k);
             }
           }
@@ -1780,7 +2124,7 @@ export class FormSalvager {
         if (k && k.startsWith(DRAFT_PREFIX)) {
           try {
             const draft = JSON.parse(localStorage.getItem(k) || '{}') as StoredDraft;
-            if (isSearchEngineSite(draft.url || draft.siteUrl || '')) {
+            if (isInvalidDraft(draft)) {
               toRemove.push(k);
             }
           } catch {}
@@ -1859,12 +2203,25 @@ export const formSalvager = new FormSalvager();
 export async function getAllSavedDrafts(): Promise<StoredDraft[]> {
   const drafts: StoredDraft[] = [];
   try {
+    const isValidDraft = (draft: StoredDraft): boolean => {
+      const url = draft.url || draft.siteUrl || '';
+      if (isSearchEngineSite(url) || isDownloaderSite(url)) return false;
+      const meta = `${draft.fieldKey} ${draft.fieldLabel || ''} ${draft.pageTitle || ''}`.toLowerCase();
+      if (/(downloader|download[-_]?url|paste[-_]?url|s_input|ig[-_]?url|insta[-_]?url)/i.test(meta)) {
+        return false;
+      }
+      if (/^https?:\/\/(www\.)?(instagram|tiktok|youtube|youtu\.be)\.com?\//i.test(draft.value.trim()) && draft.wordCount <= 2) {
+        return false;
+      }
+      return true;
+    };
+
     if (typeof chrome !== 'undefined' && chrome.storage?.local) {
       const all = await chrome.storage.local.get(null);
       for (const [k, v] of Object.entries(all)) {
         if (k.startsWith(DRAFT_PREFIX) && v && typeof v === 'object' && 'value' in v) {
           const draft = v as StoredDraft;
-          if (!isSearchEngineSite(draft.url || draft.siteUrl || '')) {
+          if (isValidDraft(draft)) {
             drafts.push(draft);
           }
         }
@@ -1875,7 +2232,7 @@ export async function getAllSavedDrafts(): Promise<StoredDraft[]> {
         if (k && k.startsWith(DRAFT_PREFIX)) {
           try {
             const draft = JSON.parse(localStorage.getItem(k) || '{}') as StoredDraft;
-            if (!isSearchEngineSite(draft.url || draft.siteUrl || '')) {
+            if (isValidDraft(draft)) {
               drafts.push(draft);
             }
           } catch {}

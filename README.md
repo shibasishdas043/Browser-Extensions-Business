@@ -24,7 +24,7 @@
 
 The modern web is plagued by intrusive newsletter popups, auto-floating corner videos, deceptive download bait, SEO-stuffed recipes, and unexpected crashes that wipe out hours of typed form text.
 
-Rather than running multiple heavy, rule-based adblockers and disjointed single-purpose tools, **ZenWeb** provides a lightweight, unified suite of **7 zero-configuration protection shields**. It operates with **zero telemetry**, **zero remote scripts**, and stores all preferences and drafts strictly on your local machine.
+Rather than running multiple heavy, rule-based adblockers and disjointed single-purpose tools, **ZenWeb** provides a lightweight, unified suite of **6 zero-configuration protection shields**. It operates with **zero telemetry**, **zero remote scripts**, and stores all preferences and drafts strictly on your local machine.
 
 ---
 
@@ -37,14 +37,13 @@ graph TD
         CS["Content Script Engine (content.js)"]
         WEB_PAGE <--> CS
 
-        subgraph Shields ["🛡️ 7 Integrated Protection Shields"]
+        subgraph Shields ["🛡️ 6 Integrated Protection Shields"]
             S1["1. Recipe Fluff Skipper"]
             S2["2. Floating Video Killer"]
-            S3["3. Overlay & Paywall Smasher"]
-            S4["4. Deceptive Download Guard"]
-            S5["5. Human Search Bypass"]
-            S6["6. Pinterest Search Blocker"]
-            S7["7. Form Salvager & Crash Guard"]
+            S3["3. Deceptive Download Guard"]
+            S4["4. Human Search Bypass"]
+            S5["5. Pinterest Search Blocker"]
+            S6["6. Form Salvager & Crash Guard"]
         end
 
         CS --> S1
@@ -53,7 +52,6 @@ graph TD
         CS --> S4
         CS --> S5
         CS --> S6
-        CS --> S7
     end
 
     subgraph Background Context ["⚙️ Manifest V3 Background Worker"]
@@ -85,7 +83,7 @@ graph TD
 
 ---
 
-## 🛡️ The 7 Core Protection Shields
+## 🛡️ The 6 Core Protection Shields
 
 ### 1. 🍳 Recipe Fluff & Story Skipper
 - **The Problem:** Recipe blogs bury essential ingredients beneath thousands of words of SEO storytelling, affiliate banners, and life anecdotes.
@@ -98,17 +96,7 @@ graph TD
 - **The Problem:** Commercial news sites detach videos and lock them into corners as floating Picture-in-Picture widgets that obscure text and distract reading.
 - **The Engine:** Leverages pure viewport geometry, bounding box aspect ratios (16:9 / 4:3), and corner-docking heuristics to identify intrusive outstream video widgets.
 - **Immunity Protections:** Strictly avoids suppressing intentional players (e.g. fullscreen video, dominant media > 55% viewport size, or native video controls).
-
-### 3. 💥 Modal & Paywall Overlay Smasher
-- **The Problem:** Websites freeze the document scroll wheel, darken the screen with backdrop scrims, and lock access behind newsletter subscription walls.
-- **The Engine:** Triggered via keyboard shortcut (`Alt+Shift+X`), popup quick-action, or context menu:
-  - Eliminates the highest z-index blocking modals, overlays, and backdrop scrims.
-  - Clears scroll-locking classes (`overflow: hidden`, `position: fixed` body locks).
-  - Removes CSS `filter: blur()` and `backdrop-filter` from obscured background text.
-  - **Zero Layout Thrash:** Replaces expensive full-DOM loops with targeted container evaluation.
-  - **Safe Checkpoint Exemption:** Strictly preserves 18+ age verification dialogs, CAPTCHAs, and cookie consent choices (CMPs).
-
-### 4. 🛑 Deceptive "Fake Download" Guard
+### 3. 🛑 Deceptive "Fake Download" Guard
 - **The Problem:** File-sharing sites, mirrors, and forums display deceptive green "Download" image banners and clickjacking overlays that trick users into downloading adware.
 - **The Engine:** Employs a Dual-Phase Differential Scoring Engine:
   - **Quarantine:** Blurs fake buttons and centers an Apple SF-style quarantine warning pill over deceptive traps.
@@ -134,18 +122,18 @@ flowchart TD
     L -- No --> N["Allow Normal Interaction"]
 ```
 
-### 5. 🔍 Human Search Bypass
+### 4. 🔍 Human Search Bypass
 - **The Problem:** Search engines are saturated with SEO content farms and low-quality AI rehashes.
 - **The Engine:** Injects an ergonomic toggle button below the search input on Google, Bing, and DuckDuckGo:
   - Automatically appends targeted human discussion queries (`site:reddit.com OR site:quora.com OR site:news.ycombinator.com ...`).
   - Badges authentic community discussions directly in search result snippets.
 
-### 6. 📌 Pinterest Search Blocker
+### 5. 📌 Pinterest Search Blocker
 - **The Problem:** Google Image searches are flooded with Pinterest links that trap users behind forced login walls.
 - **The Engine:** Real-time mutation observer identifies image search cards pointing to Pinterest domains and cleanly hides them (`display: none`).
 - **Telemetry:** Displays a live, unobtrusive counter of hidden Pinterest spam in the page corner with an instant toggle to unhide if desired.
 
-### 7. ✍️ Form Salvager & Crash Guard
+### 6. ✍️ Form Salvager & Crash Guard
 - **The Problem:** Spending 20 minutes typing a complex form, support ticket, or article draft, only for the browser tab to crash or reload and lose all input.
 - **The Engine:**
   - Real-time continuous checkpointing for `<textarea>`, `<input>`, `<select>`, radio groups, checkboxes, and `contenteditable` editors.
@@ -160,6 +148,8 @@ flowchart TD
 ```
 Browser-Extensions-Business/
 ├── manifest.json              # Manifest V3 extension configuration
+├── CHROMEWEBSTORE.md          # Complete store listing copy, permissions & review guide
+├── PRIVACY.md                 # Public on-device privacy policy for store listing
 ├── vite.config.ts             # Vite 8 multi-entry build configuration
 ├── types.d.ts                 # Central TypeScript interfaces & message types
 ├── .gitignore                 # Comprehensive git exclusion rules
@@ -177,15 +167,12 @@ Browser-Extensions-Business/
 │   │   ├── logic.ts           # Dual-phase scoring algorithm & target validators
 │   │   └── ui.ts              # Apple SF quarantine pill & dark flat green beacon
 │   ├── form-salvager/         # Anti-crash auto-save & draft restoration engine
-│   │   ├── logic.ts           # Input listener, revision tracking, sensitive regex
+│   │   ├── logic.ts           # Multi-field form detector, revision tracking, sensitive regex
 │   │   └── ui.ts              # Floating restore pill, draft selector & toasts
 │   ├── human-search/          # Google/Bing discussion bypass & SEO farm flagger
 │   │   ├── logic.ts           # Search route detection & query modifier
 │   │   ├── constants.ts       # Human discussion domain lists
 │   │   └── ui.ts              # Search bar injection & result badges
-│   ├── overlay-smasher/       # Modal killer, scroll restoration, paywall remover
-│   │   ├── logic.ts           # Mutation scanner, scroll unlocker, age gate checks
-│   │   └── ui.ts              # Panic trigger feedback & destruction animation
 │   ├── pinterest-blocker/     # Google Images Pinterest filter
 │   │   ├── logic.ts           # Search result mutation observer
 │   │   └── ui.ts              # Minimal spam counter HUD
@@ -229,7 +216,8 @@ ZenWeb is engineered to strictly follow Google Chrome Web Store Developer Progra
 | **XSS Prevention** | 100% of UI elements injected into pages are built using DOM APIs (`createElement`, `textContent`). Zero use of `innerHTML`. |
 | **Data Privacy** | All user data (whitelists, settings, salvaged form drafts) is kept locally in `chrome.storage.local`. Zero telemetry or server transmission. |
 | **Sensitive Data Protection** | Form Salvager explicitly excludes passwords, credit card numbers, CVVs, PINs, and auth tokens via regex blacklisting. |
-| **Single Purpose** | Dedicated strictly to web clutter elimination and user workflow protection. |
+| **Single Purpose** | Dedicated strictly to web browsing clutter elimination and workflow protection. |
+| **Minimal Permissions** | Requests only essential permissions (`storage`, `activeTab`, `contextMenus`, host permissions). Zero unused permissions (e.g. `scripting` is completely omitted). |
 
 ---
 
@@ -238,7 +226,6 @@ ZenWeb is engineered to strictly follow Google Chrome Web Store Developer Progra
 | Shortcut | Description |
 |---|---|
 | `Alt + Shift + Z` | Open the ZenWeb Quick Action Popup |
-| `Alt + Shift + X` | **Panic Trigger**: Instantly smash overlays and restore locked page scrolling |
 | `Alt + Shift + J` | **Quick View**: Extract and jump straight to recipe ingredients and instructions |
 
 *Shortcuts can be customized anytime at `chrome://extensions/shortcuts`.*
@@ -287,16 +274,26 @@ The compiled, optimized distribution bundle will be generated in the `dist/` dir
 
 ---
 
-## 📦 Packaging for Chrome Web Store
+## 🚀 Chrome Web Store Submission Guide
 
-To create a clean distribution archive for the Chrome Developer Dashboard:
+The repository includes complete, copy-paste assets and review forms ready for the [Chrome Web Store Developer Dashboard](https://chrome.google.com/webstore/devconsole):
+
+- **Store Metadata & Justifications**: View [`CHROMEWEBSTORE.md`](CHROMEWEBSTORE.md) for pre-written titles, 132-character summaries, item descriptions, permission justifications, and reviewer testing steps.
+- **Privacy Policy**: Hosted at [`PRIVACY.md`](PRIVACY.md) and publicly viewable on GitHub.
+- **Icons**: Store icon (128×128) and toolbar icons (16×16, 32×32, 48×48) are located in `assets/`.
+
+### Packaging the Extension ZIP
+To generate the distribution archive for submission:
 
 ```powershell
-# In PowerShell (from repository root after 'npm run build'):
+# Build latest optimized production bundle
+npm run build
+
+# Create clean ZIP archive containing dist/ contents
 Compress-Archive -Path dist\* -DestinationPath zenweb-v1.0.0.zip -Force
 ```
 
-This generates `zenweb-v1.0.0.zip` containing `manifest.json` at the root, completely excluding `.git/`, `node_modules/`, and internal project documents.
+Upload `zenweb-v1.0.0.zip` directly under the **Package** tab in the Chrome Developer Dashboard.
 
 ---
 

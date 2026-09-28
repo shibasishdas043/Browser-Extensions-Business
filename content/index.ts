@@ -1,6 +1,6 @@
 /**
  * ZenWeb — Master Content Script 2.0
- * Initializes and reactively controls all 7 protection shields according to
+ * Initializes and reactively controls all 6 protection shields according to
  * user preferences, whitelist exclusions, and runtime extension commands.
  */
 
@@ -11,7 +11,6 @@ import { humanSearch } from '../features/human-search/logic';
 import { pinterestBlocker } from '../features/pinterest-blocker/logic';
 import { videoKiller } from '../features/video-killer/logic';
 import { recipeSkipper } from '../features/recipe-skipper/logic';
-import { overlaySmasher } from '../features/overlay-smasher/logic';
 import { formSalvager } from '../features/form-salvager/logic';
 
 let currentSettings: ZenWebSettings | null = null;
@@ -31,7 +30,6 @@ function stopAllShields(): void {
   pinterestBlocker.stop();
   videoKiller.stop();
   recipeSkipper.stop();
-  overlaySmasher.stop();
   formSalvager.stop();
 
   try {
@@ -89,14 +87,7 @@ function applyShields(settings: ZenWebSettings): void {
     recipeSkipper.stop();
   }
 
-  // 6. Modal & Paywall Overlay Smasher
-  if (master && settings.autoOverlaySmasherEnabled) {
-    overlaySmasher.start();
-  } else {
-    overlaySmasher.stop();
-  }
-
-  // 7. Form Salvager & Crash Guard
+  // 6. Form Salvager & Crash Guard
   if (master && settings.formSalvagerEnabled) {
     formSalvager.start();
   } else {
@@ -105,18 +96,12 @@ function applyShields(settings: ZenWebSettings): void {
 }
 
 /**
- * Listen for extension runtime messages (panic smash, jump recipe, tab stats).
+ * Listen for extension runtime messages (jump recipe, tab stats).
  */
 function attachMessageListeners(): void {
   if (typeof chrome !== 'undefined' && chrome.runtime?.onMessage) {
     chrome.runtime.onMessage.addListener((msg: ExtensionMessage, _sender, sendResponse) => {
       switch (msg.action) {
-        case 'SMASH_OVERLAY': {
-          const removed = overlaySmasher.smashNow(true);
-          sendResponse({ success: true, removedCount: removed });
-          break;
-        }
-
         case 'JUMP_RECIPE': {
           recipeSkipper.openReaderOrJump();
           sendResponse({ success: true });

@@ -1,5 +1,5 @@
 import gsap from 'gsap';
-import { openFullSettings, loadSessionStats, triggerSmashOverlay } from './logic';
+import { openFullSettings, loadSessionStats } from './logic';
 import {
   getSettings,
   updateSetting,
@@ -42,7 +42,6 @@ const STATS: StatDef[] = [
   { id:'pinterest', label:'Pinterest Walls Hidden',  icon:'📌', color:'#f43f5e', glow:'rgba(244,63,94,0.09)',    anim:'flipY'   },
   { id:'video',     label:'Videos Killed',           icon:'🎬', color:'#ef4444', glow:'rgba(239,68,68,0.09)',    anim:'slam'    },
   { id:'recipe',    label:'Recipe Jumps',            icon:'🍳', color:'#f59e0b', glow:'rgba(245,158,11,0.08)',   anim:'spin'    },
-  { id:'overlay',   label:'Overlays Smashed',        icon:'🛡️', color:'#a855f7', glow:'rgba(168,85,247,0.09)',   anim:'flipX'   },
 ];
 
 const INTERVAL_MS = 2600;
@@ -71,7 +70,6 @@ class ZenWebPopupUI {
   private toggleSub!:       HTMLElement;
   private settingsBtn!:     HTMLButtonElement;
   private refreshBtn!:      HTMLButtonElement;
-  private smashBtn!:        HTMLButtonElement;
   private vaultBtn!:        HTMLButtonElement;
   private sitePillBtn!:     HTMLButtonElement;
   private siteDotEl!:       HTMLElement;
@@ -188,7 +186,6 @@ class ZenWebPopupUI {
     this.toggleSub         = document.getElementById('zw-toggle-sub')!;
     this.settingsBtn       = document.getElementById('zw-btn-settings') as HTMLButtonElement;
     this.refreshBtn        = document.getElementById('zw-btn-refresh') as HTMLButtonElement;
-    this.smashBtn          = document.getElementById('zw-btn-smash') as HTMLButtonElement;
     this.vaultBtn          = document.getElementById('zw-btn-vault') as HTMLButtonElement;
     this.sitePillBtn       = document.getElementById('zw-site-whitelist-btn') as HTMLButtonElement;
     this.siteDotEl         = document.getElementById('zw-site-dot')!;
@@ -214,17 +211,6 @@ class ZenWebPopupUI {
         const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
         if (tab?.id) { chrome.tabs.reload(tab.id); this.toast('Page rescanned ✓'); }
       }
-    });
-
-    // Panic Smash Button
-    this.smashBtn?.addEventListener('click', async () => {
-      const icon = this.smashBtn.querySelector('.zw-icon-svg');
-      if (icon) {
-        gsap.fromTo(icon, { scale: 0.8 }, { scale: 1.3, duration: 0.2, yoyo: true, repeat: 1, ease: 'power2.out' });
-      }
-      this.pressAnim(this.smashBtn);
-      const res = await triggerSmashOverlay();
-      this.toast(res.message, res.success ? 'active' : 'deactive');
     });
 
     // Vault Button
@@ -305,7 +291,7 @@ class ZenWebPopupUI {
   private applyStats(s: ProtectionStats) {
     this.statVals = [
       s.fakeDownloadsDefused, s.formsBackedUp, s.seoSpamFiltered, s.pinterestHidden,
-      s.videosSuppressed, s.recipesSkipped, s.overlaysSmashed,
+      s.videosSuppressed, s.recipesSkipped,
     ];
 
     const total = this.statVals.reduce((a, b) => a + b, 0);
@@ -517,7 +503,6 @@ class ZenWebPopupUI {
       this.currentSettings.pinterestBlockerEnabled,
       this.currentSettings.floatingVideoKillerEnabled,
       this.currentSettings.recipeSkipperEnabled,
-      this.currentSettings.autoOverlaySmasherEnabled,
       this.currentSettings.formSalvagerEnabled,
     ].filter(Boolean).length;
   }

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "ZenWeb - Digital Peace Suite",
   "version": "1.0.0",
-  "description": "Clean up the web: skip recipe fluff, kill floating videos, block Pinterest spam, smash overlays, and save form text.",
+  "description": "Clean up the web: skip recipe fluff, kill floating videos, block Pinterest spam, and save form text.",
   "icons": {
     "16": "assets/16x16.png",
     "32": "assets/32x32.png",
@@ -30,7 +30,6 @@
   "permissions": [
     "storage",
     "activeTab",
-    "scripting",
     "contextMenus"
   ],
   "host_permissions": [
@@ -47,16 +46,6 @@
         "chromeos": "Alt+Shift+Z"
       },
       "description": "Open ZenWeb Quick Action Popup"
-    },
-    "smash-overlay": {
-      "suggested_key": {
-        "default": "Alt+Shift+X",
-        "windows": "Alt+Shift+X",
-        "mac": "Alt+Shift+X",
-        "linux": "Alt+Shift+X",
-        "chromeos": "Alt+Shift+X"
-      },
-      "description": "Panic Trigger: Smash Overlays & Restore Page Scroll"
     },
     "jump-recipe": {
       "suggested_key": {

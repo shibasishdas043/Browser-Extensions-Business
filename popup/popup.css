@@ -123,12 +123,6 @@ body.zw-body {
   transition: transform 0.35s var(--ease), stroke 0.2s var(--ease), color 0.2s var(--ease);
 }
 
-.zw-icon-btn.zw-btn-smash {
-  color: #c2410c;
-}
-.zw-icon-btn.zw-btn-smash svg {
-  stroke: #c2410c;
-}
 
 /* Refresh Button Hover — flat dark green */
 .zw-icon-btn.zw-btn-refresh:hover {
@@ -156,17 +150,6 @@ body.zw-body {
   transform: rotate(60deg);
 }
 
-/* Smash Button Hover — flat dark orange */
-.zw-icon-btn.zw-btn-smash:hover {
-  background: transparent;
-  border: none;
-  color: #c2410c;
-  box-shadow: none;
-  transform: translateY(-1px);
-}
-.zw-icon-btn.zw-btn-smash:hover .zw-icon-svg {
-  stroke: #c2410c;
-}
 
 /* Vault Button Hover — flat dark cyan */
 .zw-icon-btn.zw-btn-vault:hover {
